@@ -54,7 +54,7 @@ export default function AdminDashboard() {
     });
   }, [session, status, router]);
 
-  // --- RESTORED MISSING FUNCTIONS ---
+  // Manual Form Handlers
   const handleChoiceChange = (index: number, text: string) => {
     const newChoices = [...choices];
     newChoices[index].text = text;
@@ -65,9 +65,7 @@ export default function AdminDashboard() {
     const newChoices = choices.map((c, i) => ({ ...c, isCorrect: i === index }));
     setChoices(newChoices);
   };
-  // ----------------------------------
 
-  // Handle Manual Submit
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setIsSubmitting(true);
@@ -90,7 +88,7 @@ export default function AdminDashboard() {
     setIsSubmitting(false);
   };
 
-  // Handle AI Generation
+  // AI Handlers
   const handleGenerateAI = async (e: React.FormEvent) => {
     e.preventDefault();
     setIsGenerating(true);
@@ -117,7 +115,6 @@ export default function AdminDashboard() {
     setIsGenerating(false);
   };
 
-  // Save an AI generated question to the DB
   const saveAIQuestion = async (q: any, index: number) => {
     const payload = {
       examCode: aiConfig.examCode,
@@ -224,24 +221,86 @@ export default function AdminDashboard() {
                   </button>
                 </form>
 
-                {/* AI Preview Area */}
+                {/* AI Preview Area - NOW EDITABLE */}
                 {generatedQuestions.length > 0 && (
                   <div className="space-y-6 border-t border-blue-200 dark:border-blue-800 pt-6">
-                    <h3 className="font-bold text-lg text-gray-800 dark:text-gray-200">Review & Approve</h3>
+                    <h3 className="font-bold text-lg text-gray-800 dark:text-gray-200">Review, Edit & Approve</h3>
                     {generatedQuestions.map((q, index) => (
-                      <div key={index} className="bg-white dark:bg-gray-800 p-4 rounded border dark:border-gray-600 shadow-sm">
-                        <p className="font-medium mb-3 dark:text-white">{q.stemText}</p>
-                        <div className="space-y-1 mb-3 pl-4">
-                          {q.choices.map((c: any, i: number) => (
-                            <p key={i} className={`text-sm ${c.isCorrect ? 'text-green-600 dark:text-green-400 font-bold' : 'text-gray-600 dark:text-gray-400'}`}>
-                              {c.isCorrect ? '✓ ' : '○ '}{c.text}
-                            </p>
-                          ))}
+                      <div key={index} className="bg-white dark:bg-gray-800 p-4 rounded border dark:border-gray-600 shadow-sm space-y-4">
+                        
+                        {/* Editable Stem */}
+                        <div>
+                          <label className="block text-xs font-bold text-gray-500 uppercase mb-1">Question Text</label>
+                          <textarea 
+                            className="w-full p-2 border dark:border-gray-600 rounded bg-gray-50 dark:bg-gray-700 dark:text-white"
+                            rows={2}
+                            value={q.stemText}
+                            onChange={(e) => {
+                              const updated = [...generatedQuestions];
+                              updated[index].stemText = e.target.value;
+                              setGeneratedQuestions(updated);
+                            }}
+                          />
                         </div>
-                        <p className="text-sm text-gray-500 dark:text-gray-400 italic mb-4">Exp: {q.explanationText}</p>
-                        <button onClick={() => saveAIQuestion(q, index)} className="bg-green-600 hover:bg-green-700 text-white text-sm font-bold py-2 px-4 rounded transition-colors">
-                          Approve & Save to DB
-                        </button>
+
+                        {/* Editable Choices */}
+                        <div>
+                          <label className="block text-xs font-bold text-gray-500 uppercase mb-1">Choices (Select Correct)</label>
+                          <div className="space-y-2">
+                            {q.choices.map((c: any, i: number) => (
+                              <div key={i} className="flex items-center gap-2">
+                                <input 
+                                  type="radio" 
+                                  name={`correct-${index}`} 
+                                  checked={c.isCorrect} 
+                                  onChange={() => {
+                                    const updated = [...generatedQuestions];
+                                    updated[index].choices.forEach((choice: any, idx: number) => {
+                                      choice.isCorrect = (idx === i);
+                                    });
+                                    setGeneratedQuestions(updated);
+                                  }}
+                                  className="w-4 h-4 text-blue-600"
+                                />
+                                <input 
+                                  type="text"
+                                  className={`w-full p-2 border rounded bg-gray-50 dark:bg-gray-700 dark:text-white text-sm ${c.isCorrect ? 'border-green-500' : 'dark:border-gray-600'}`}
+                                  value={c.text}
+                                  onChange={(e) => {
+                                    const updated = [...generatedQuestions];
+                                    updated[index].choices[i].text = e.target.value;
+                                    setGeneratedQuestions(updated);
+                                  }}
+                                />
+                              </div>
+                            ))}
+                          </div>
+                        </div>
+
+                        {/* Editable Explanation */}
+                        <div>
+                          <label className="block text-xs font-bold text-gray-500 uppercase mb-1">Explanation</label>
+                          <textarea 
+                            className="w-full p-2 border dark:border-gray-600 rounded bg-gray-50 dark:bg-gray-700 dark:text-white text-sm"
+                            rows={2}
+                            value={q.explanationText}
+                            onChange={(e) => {
+                              const updated = [...generatedQuestions];
+                              updated[index].explanationText = e.target.value;
+                              setGeneratedQuestions(updated);
+                            }}
+                          />
+                        </div>
+
+                        {/* Action Buttons */}
+                        <div className="flex gap-3 pt-2">
+                          <button onClick={() => saveAIQuestion(q, index)} className="flex-1 bg-green-600 hover:bg-green-700 text-white text-sm font-bold py-2 px-4 rounded transition-colors">
+                            ✓ Approve & Save
+                          </button>
+                          <button onClick={() => setGeneratedQuestions(prev => prev.filter((_, i) => i !== index))} className="bg-red-100 text-red-700 hover:bg-red-200 dark:bg-red-900/30 dark:text-red-400 dark:hover:bg-red-900/50 text-sm font-bold py-2 px-4 rounded transition-colors">
+                            ✕ Discard
+                          </button>
+                        </div>
                       </div>
                     ))}
                   </div>
