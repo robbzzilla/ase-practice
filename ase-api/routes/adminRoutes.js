@@ -5,11 +5,6 @@ const { OpenAI } = require('openai');
 
 const prisma = new PrismaClient();
 
-// Initialize OpenAI (Requires OPENAI_API_KEY environment variable)
-const openai = new OpenAI({
-  apiKey: process.env.OPENAI_API_KEY,
-});
-
 // 1. GET /api/admin/stats
 router.get('/stats', async (req, res) => {
   try {
@@ -90,34 +85,40 @@ router.post('/questions', async (req, res) => {
 router.post('/generate-ai', async (req, res) => {
   const { examCode, topic, count } = req.body;
 
+  // Check for the key INSIDE the route so it doesn't crash the whole server on startup
   if (!process.env.OPENAI_API_KEY) {
-    return res.status(500).json({ error: 'OpenAI API key is not configured on the server.' });
+    return res.status(500).json({ error: 'OpenAI API key is missing from server environment variables.' });
   }
 
-  const prompt = `
-    You are an expert automotive instructor writing questions for the ASE ${examCode} certification exam.
-    Generate ${count || 3} multiple-choice questions focusing on the topic: "${topic || 'General'}".
-    
-    You MUST return your response as a valid JSON object containing a single array called "questions".
-    Each object in the "questions" array must have the following exact structure:
-    {
-      "stemText": "The actual question text",
-      "explanationText": "A detailed explanation of why the correct answer is right and the others are wrong",
-      "choices": [
-        { "text": "Choice A", "isCorrect": false },
-        { "text": "Choice B", "isCorrect": true },
-        { "text": "Choice C", "isCorrect": false },
-        { "text": "Choice D", "isCorrect": false }
-      ]
-    }
-    Ensure exactly one choice is true. Do not include any markdown formatting outside the JSON.
-  `;
-
   try {
+    // Initialize OpenAI here
+    const openai = new OpenAI({
+      apiKey: process.env.OPENAI_API_KEY,
+    });
+
+    const prompt = `
+      You are an expert automotive instructor writing questions for the ASE ${examCode} certification exam.
+      Generate ${count || 3} multiple-choice questions focusing on the topic: "${topic || 'General'}".
+      
+      You MUST return your response as a valid JSON object containing a single array called "questions".
+      Each object in the "questions" array must have the following exact structure:
+      {
+        "stemText": "The actual question text",
+        "explanationText": "A detailed explanation of why the correct answer is right and the others are wrong",
+        "choices": [
+          { "text": "Choice A", "isCorrect": false },
+          { "text": "Choice B", "isCorrect": true },
+          { "text": "Choice C", "isCorrect": false },
+          { "text": "Choice D", "isCorrect": false }
+        ]
+      }
+      Ensure exactly one choice is true. Do not include any markdown formatting outside the JSON.
+    `;
+
     const completion = await openai.chat.completions.create({
-      model: "gpt-4o-mini", // Fast, cheap, and highly capable for this task
+      model: "gpt-4o-mini",
       messages: [{ role: "user", content: prompt }],
-      response_format: { type: "json_object" } // Forces OpenAI to return valid JSON
+      response_format: { type: "json_object" }
     });
 
     const content = completion.choices[0].message.content;
