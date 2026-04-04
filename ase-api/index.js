@@ -5,6 +5,16 @@ const { PrismaClient } = require('@prisma/client');
 const app = express();
 const prisma = new PrismaClient(); // Initialize Prisma
 
+const adminRoutes = require('./routes/adminRoutes'); // Add to the top with other requires
+
+// Add this below app.use('/api/exams', examRoutes);
+app.use('/api/admin', adminRoutes);
+
+const gamifyRoutes = require('./routes/gamifyRoutes'); // Add to the top
+
+// Add this below your other app.use() statements
+app.use('/api/gamify', gamifyRoutes);
+
 app.use(cors());
 app.use(express.json());
 

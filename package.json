@@ -1,0 +1,15 @@
+{
+  "name": "ase-practice-monorepo",
+  "version": "1.0.0",
+  "private": true,
+  "workspaces": [
+    "ase-api",
+    "ase-web"
+  ],
+  "scripts": {
+    "dev": "concurrently -c 'cyan,magenta,yellow' -n 'API,WEB,PROXY' 'npm run start --workspace=ase-api' 'npm run dev --workspace=ase-web' './ase-web/cloud-sql-proxy ase-practice:us-central1:ase-db-prod'"
+  },
+  "devDependencies": {
+    "concurrently": "^8.0.0"
+  }
+}

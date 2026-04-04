@@ -1,46 +1,61 @@
 'use client';
 import { useState, useEffect, useRef, use, Suspense } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
-import PerformanceChart from '../../components/PerformanceChart';
 
-function ExamLogic({ examCode }) {
+// 1. Define the Database Types
+interface Choice {
+  id: number;
+  choice_text: string;
+  is_correct: boolean;
+}
+
+interface Question {
+  id: number;
+  stem_text: string;
+  explanation_text: string;
+  topic: string;
+  choices: Choice[];
+}
+
+interface ExamLogicProps {
+  examCode: string;
+}
+
+function ExamLogic({ examCode }: ExamLogicProps) {
   const router = useRouter();
   const searchParams = useSearchParams();
   
-  // Determine mode and targeted topic from URL
   const mode = searchParams.get('mode') || 'practice';
   const isExamMode = mode === 'exam';
-  const topic = searchParams.get('topic'); // For targeted practice
+  const topic = searchParams.get('topic'); 
   
-  const [questions, setQuestions] = useState([]);
-  const [loading, setLoading] = useState(true);
+  // 2. Apply types to state
+  const [questions, setQuestions] = useState<Question[]>([]);
+  const [loading, setLoading] = useState<boolean>(true);
   
-  const [currentIndex, setCurrentIndex] = useState(0);
-  const [userAnswers, setUserAnswers] = useState({}); 
-  const [checkedQuestions, setCheckedQuestions] = useState({}); 
-  const [isFinished, setIsFinished] = useState(false);
+  const [currentIndex, setCurrentIndex] = useState<number>(0);
+  const [userAnswers, setUserAnswers] = useState<Record<number, number>>({}); 
+  const [checkedQuestions, setCheckedQuestions] = useState<Record<number, boolean>>({}); 
+  const [isFinished, setIsFinished] = useState<boolean>(false);
   
-  const [isReviewMode, setIsReviewMode] = useState(false);
-  const [reviewIndices, setReviewIndices] = useState([]); 
-  const [reviewPosition, setReviewPosition] = useState(0); 
+  const [isReviewMode, setIsReviewMode] = useState<boolean>(false);
+  const [reviewIndices, setReviewIndices] = useState<number[]>([]); 
+  const [reviewPosition, setReviewPosition] = useState<number>(0); 
   
-  // Timer and Hint States
-  const [timeLeft, setTimeLeft] = useState(null);
-  const [eliminatedChoices, setEliminatedChoices] = useState({}); 
+  const [timeLeft, setTimeLeft] = useState<number | null>(null);
+  const [eliminatedChoices, setEliminatedChoices] = useState<Record<number, number[]>>({}); 
   
-  const bottomRef = useRef(null);
+  const bottomRef = useRef<HTMLDivElement>(null);
 
-  // Fetch Questions
   useEffect(() => {
     let url = `/api/exams/${examCode}/generate`;
-    if (topic) url += `?topic=${encodeURIComponent(topic)}`; // Append topic if it exists
+    if (topic) url += `?topic=${encodeURIComponent(topic)}`;
 
     fetch(url)
       .then(res => res.json())
       .then(data => {
         if (data.success) {
           setQuestions(data.questions);
-          // Initialize timer for Exam Mode (2 minutes per question)
           if (isExamMode) setTimeLeft(data.questions.length * 120);
         }
         setLoading(false);
@@ -48,14 +63,12 @@ function ExamLogic({ examCode }) {
       .catch(err => console.error(err));
   }, [examCode, isExamMode, topic]);
 
-  // Timer Countdown Logic
   useEffect(() => {
     if (timeLeft === null || timeLeft <= 0 || isFinished || isReviewMode) return;
-    const timerId = setInterval(() => setTimeLeft(prev => prev - 1), 1000);
+    const timerId = setInterval(() => setTimeLeft(prev => (prev !== null ? prev - 1 : null)), 1000);
     return () => clearInterval(timerId);
   }, [timeLeft, isFinished, isReviewMode]);
 
-  // Auto-Submit when Timer hits 0
   useEffect(() => {
     if (timeLeft === 0 && !isFinished) {
       setIsFinished(true);
@@ -63,7 +76,7 @@ function ExamLogic({ examCode }) {
     }
   }, [timeLeft, isFinished]);
 
-  const formatTime = (seconds) => {
+  const formatTime = (seconds: number | null) => {
     if (seconds === null) return "";
     const m = Math.floor(seconds / 60).toString().padStart(2, '0');
     const s = (seconds % 60).toString().padStart(2, '0');
@@ -73,8 +86,8 @@ function ExamLogic({ examCode }) {
   const calculateScore = () => {
     let correct = 0;
     let incorrect = 0;
-    let missed = []; 
-    let topicBreakdown = {}; 
+    let missed: number[] = []; 
+    let topicBreakdown: Record<string, { correct: number, total: number }> = {}; 
     
     questions.forEach((q, index) => {
       const selectedChoiceId = userAnswers[index];
@@ -98,38 +111,39 @@ function ExamLogic({ examCode }) {
     return { correct, incorrect, total: questions.length, missed, topicBreakdown };
   };
 
-  // Save Scores to Database
   useEffect(() => {
     if (isFinished && !isReviewMode) {
       const { correct, total, topicBreakdown } = calculateScore();
       const percentage = Math.round((correct / total) * 100);
       
       const recentModeName = isExamMode ? 'Exam' : (topic ? 'Targeted Practice' : 'Practice');
+      const recent = { examCode, percentage, mode: recentModeName };
+      localStorage.setItem('ase_recent', JSON.stringify(recent));
 
-      // ONLY save to Database if in EXAM MODE (and not a targeted subset)
       if (isExamMode && !topic) {
-        // Send data to our new API endpoint
-        fetch('/api/scores', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            username: 'Guest', // Hardcoded until we add real login
-            examCode: examCode,
-            percentage: percentage,
-            mode: recentModeName,
-            topicData: topicBreakdown
-          })
-        })
-        .then(res => res.json())
-        .then(data => console.log("Score saved to DB:", data))
-        .catch(err => console.error("Failed to save score:", err));
+        const highScores = JSON.parse(localStorage.getItem('ase_highscores') || '{}');
+        if (!highScores[examCode] || percentage > highScores[examCode]) {
+          highScores[examCode] = percentage;
+          localStorage.setItem('ase_highscores', JSON.stringify(highScores));
+        }
+
+        const savedTopics = JSON.parse(localStorage.getItem('ase_topics') || '{}');
+        if (!savedTopics[examCode]) savedTopics[examCode] = {}; 
+        
+        Object.entries(topicBreakdown).forEach(([t, stats]) => {
+          if (!savedTopics[examCode][t]) {
+            savedTopics[examCode][t] = { correct: 0, total: 0 };
+          }
+          savedTopics[examCode][t].correct += stats.correct;
+          savedTopics[examCode][t].total += stats.total;
+        });
+        localStorage.setItem('ase_topics', JSON.stringify(savedTopics));
       }
     }
   }, [isFinished, isReviewMode, isExamMode, examCode, topic]);
 
   const activeIndex = isReviewMode ? reviewIndices[reviewPosition] : currentIndex;
 
-  // 50/50 Hint Logic
   const handleHint = () => {
     if (eliminatedChoices[activeIndex]) return; 
     const currentQ = questions[activeIndex];
@@ -141,7 +155,7 @@ function ExamLogic({ examCode }) {
     setEliminatedChoices(prev => ({ ...prev, [activeIndex]: toEliminate }));
   };
 
-  const handleSelectAnswer = (choiceId) => {
+  const handleSelectAnswer = (choiceId: number) => {
     if (isReviewMode) return;
     if (!isExamMode && checkedQuestions[activeIndex]) return;
     setUserAnswers(prev => ({ ...prev, [activeIndex]: choiceId }));
@@ -187,7 +201,7 @@ function ExamLogic({ examCode }) {
     }
   };
 
-  const startReview = (missedIndices) => {
+  const startReview = (missedIndices: number[]) => {
     if (missedIndices.length === 0) {
       alert("You got a perfect score! There are no missed questions to review.");
       return;
@@ -202,9 +216,6 @@ function ExamLogic({ examCode }) {
   if (loading) return <div className="p-8 text-center">Loading ASE {examCode} Data...</div>;
   if (questions.length === 0) return <div className="p-8 text-center">No questions found for this selection.</div>;
 
-  // ==========================================
-  // RESULTS SCREEN
-  // ==========================================
   if (isFinished) {
     const { correct, incorrect, total, missed, topicBreakdown } = calculateScore();
     const percentage = Math.round((correct / total) * 100);
@@ -265,9 +276,6 @@ function ExamLogic({ examCode }) {
     );
   }
 
-  // ==========================================
-  // TEST / REVIEW SCREEN
-  // ==========================================
   const currentQuestion = questions[activeIndex];
   const currentSelectedAnswer = userAnswers[activeIndex];
   const showResults = isReviewMode || (!isExamMode && checkedQuestions[activeIndex]);
@@ -395,7 +403,7 @@ function ExamLogic({ examCode }) {
   );
 }
 
-export default function TestPage({ params }) {
+export default function TestPage({ params }: { params: Promise<{ examCode: string }> }) {
   const { examCode } = use(params);
   return (
     <Suspense fallback={<div className="p-8 text-center">Loading Exam Data...</div>}>
