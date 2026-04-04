@@ -1,10 +1,10 @@
-FROM node:18-bullseye-slim
+FROM node:18-bookworm-slim
 WORKDIR /usr/src/app
 
-# Install OpenSSL for Debian
+# Install OpenSSL
 RUN apt-get update && apt-get install -y openssl
 
-# Copy package files and install dependencies
+# Copy package files and install
 COPY package*.json ./
 COPY prisma ./prisma/
 RUN npm install
@@ -12,7 +12,7 @@ RUN npm install
 # Copy the rest of the code
 COPY . .
 
-# FORCE DELETE the cached Prisma client, then regenerate natively
+# Force clean generation of the Prisma client
 RUN rm -rf node_modules/.prisma
 RUN rm -rf node_modules/@prisma/client
 RUN npx prisma generate
