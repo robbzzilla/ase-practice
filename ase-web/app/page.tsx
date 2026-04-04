@@ -20,7 +20,6 @@ export default function Home() {
   const [highScores, setHighScores] = useState<Record<string, number>>({});
   const [topicStats, setTopicStats] = useState<Record<string, Record<string, TopicStat>>>({});
 
-  // Smart Data Loading (Database Syncing)
   useEffect(() => {
     const loadData = async () => {
       if (session?.user?.email) {
@@ -92,7 +91,6 @@ export default function Home() {
   return (
     <div className="max-w-5xl mx-auto p-4 md:p-8 text-black dark:text-white transition-colors">
       
-      {/* Clean Auth Header */}
       <div className="flex flex-wrap justify-end items-center gap-4 mb-8 text-sm">
         <Link href="/leaderboard" className="text-yellow-600 dark:text-yellow-500 hover:underline font-bold flex items-center gap-1">
           🏆 Leaderboard
@@ -143,7 +141,6 @@ export default function Home() {
           return (
             <div key={exam.code} className="border dark:border-gray-700 rounded-lg shadow-sm bg-white dark:bg-gray-800 overflow-hidden transition-all">
               
-              {/* Clickable Header */}
               <div onClick={() => toggleExpand(exam.code)} className="p-4 md:p-6 cursor-pointer hover:bg-gray-50 dark:hover:bg-gray-700 flex justify-between items-center relative transition-colors">
                 {bestScore !== undefined && (
                   <div className={`absolute top-0 right-0 px-3 py-1 text-xs font-bold text-white rounded-bl-lg ${bestScore >= 80 ? 'bg-green-500 dark:bg-green-600' : 'bg-yellow-500 dark:bg-yellow-600'}`}>
@@ -157,7 +154,6 @@ export default function Home() {
                 <div className="text-gray-400 dark:text-gray-500 text-xl md:text-2xl shrink-0">{isExpanded ? '▲' : '▼'}</div>
               </div>
 
-              {/* Expanded Content */}
               {isExpanded && (
                 <div className="p-4 md:p-6 border-t dark:border-gray-700 bg-gray-50 dark:bg-gray-900/50 transition-colors">
                   <div className="flex flex-col sm:flex-row gap-3 md:gap-4 mb-8">
@@ -176,7 +172,6 @@ export default function Home() {
                   ) : (
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                       
-                      {/* Strengths */}
                       <div>
                         <h4 className="text-xs md:text-sm font-bold text-green-700 dark:text-green-400 mb-2 uppercase tracking-wider">Top Strengths</h4>
                         <ul className="space-y-2">
@@ -189,7 +184,6 @@ export default function Home() {
                         </ul>
                       </div>
 
-                      {/* Weaknesses */}
                       <div>
                         <h4 className="text-xs md:text-sm font-bold text-red-700 dark:text-red-400 mb-2 uppercase tracking-wider">Areas to Review</h4>
                         <ul className="space-y-2">
