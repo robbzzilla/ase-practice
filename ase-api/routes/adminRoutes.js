@@ -1,7 +1,7 @@
 const express = require('express');
 const router = express.Router();
 const { PrismaClient } = require('@prisma/client');
-const { OpenAI } = require('openai');
+const { GoogleGenerativeAI } = require('@google/generative-ai');
 
 const prisma = new PrismaClient();
 
@@ -81,19 +81,22 @@ router.post('/questions', async (req, res) => {
   }
 });
 
-// 4. POST /api/admin/generate-ai (NEW: AI Generation)
+// 4. POST /api/admin/generate-ai (NEW: Gemini AI Generation)
 router.post('/generate-ai', async (req, res) => {
   const { examCode, topic, count } = req.body;
 
-  // Check for the key INSIDE the route so it doesn't crash the whole server on startup
-  if (!process.env.OPENAI_API_KEY) {
-    return res.status(500).json({ error: 'OpenAI API key is missing from server environment variables.' });
+  if (!process.env.GEMINI_API_KEY) {
+    return res.status(500).json({ error: 'GEMINI_API_KEY is missing from server environment variables.' });
   }
 
   try {
-    // Initialize OpenAI here
-    const openai = new OpenAI({
-      apiKey: process.env.OPENAI_API_KEY,
+    // Initialize Gemini
+    const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY);
+    
+    // Use Gemini 1.5 Flash and force it to return JSON
+    const model = genAI.getGenerativeModel({ 
+      model: "gemini-1.5-flash",
+      generationConfig: { responseMimeType: "application/json" }
     });
 
     const prompt = `
@@ -112,22 +115,19 @@ router.post('/generate-ai', async (req, res) => {
           { "text": "Choice D", "isCorrect": false }
         ]
       }
-      Ensure exactly one choice is true. Do not include any markdown formatting outside the JSON.
+      Ensure exactly one choice is true.
     `;
 
-    const completion = await openai.chat.completions.create({
-      model: "gpt-4o-mini",
-      messages: [{ role: "user", content: prompt }],
-      response_format: { type: "json_object" }
-    });
-
-    const content = completion.choices[0].message.content;
-    const parsedData = JSON.parse(content);
+    const result = await model.generateContent(prompt);
+    const responseText = result.response.text();
+    
+    // Parse the JSON returned by Gemini
+    const parsedData = JSON.parse(responseText);
     
     res.json({ success: true, questions: parsedData.questions });
   } catch (err) {
-    console.error("AI Generation error:", err);
-    res.status(500).json({ error: 'Failed to generate questions with AI' });
+    console.error("Gemini Generation error:", err);
+    res.status(500).json({ error: 'Failed to generate questions with Gemini AI' });
   }
 });
 
