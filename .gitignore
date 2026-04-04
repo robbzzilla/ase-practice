@@ -1,35 +1,3 @@
-# Dependencies (The heavy files)
 node_modules/
-*/node_modules/
-
-# Next.js build files
 .next/
-
-# Secrets (Security risk)
 .env
-.env.local
-
-# Prisma generated client
-ase-api/generated/
-
-# Cloud Shell System Files
-.cache/
-.codeoss/
-.config/
-.docker/
-.gemini/
-.local/
-.npm/
-.vscode/
-.bash_history
-.bash_logout
-.bashrc
-.profile
-.psql_history
-.lesshst
-.sudo_as_admin_successful
-cloud-sql-proxy
-.git-credentials
-.gitconfig
-.git-credentials
-.gitconfig
