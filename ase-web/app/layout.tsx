@@ -12,7 +12,7 @@ export const metadata: Metadata = {
     siteName: 'ASE Practice',
     images: [
       {
-        url: '/og-image.jpg', // This points to the image in your public folder
+        url: '/og-image.jpg',
         width: 1200,
         height: 630,
         alt: 'ASE Practice Platform Preview',
