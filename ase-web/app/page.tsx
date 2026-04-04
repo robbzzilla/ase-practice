@@ -20,11 +20,10 @@ export default function Home() {
   const [highScores, setHighScores] = useState<Record<string, number>>({});
   const [topicStats, setTopicStats] = useState<Record<string, Record<string, TopicStat>>>({});
 
-  // NEW: Smart Data Loading (Database Syncing)
+  // Smart Data Loading (Database Syncing)
   useEffect(() => {
     const loadData = async () => {
       if (session?.user?.email) {
-        // 1. User is logged in: Fetch permanent data from PostgreSQL
         try {
           const res = await fetch(`/api/scores/${session.user.email}`);
           const data = await res.json();
@@ -34,15 +33,11 @@ export default function Home() {
             const dbTopicStats: Record<string, Record<string, TopicStat>> = {};
 
             data.results.forEach((result: any) => {
-              // Only calculate official 'Exam' mode attempts
               if (result.mode === 'Exam') {
-                
-                // Calculate High Scores
                 if (!dbHighScores[result.exam_code] || result.score_percentage > dbHighScores[result.exam_code]) {
                   dbHighScores[result.exam_code] = result.score_percentage;
                 }
 
-                // Calculate Topic Stats
                 if (result.topic_data) {
                   if (!dbTopicStats[result.exam_code]) dbTopicStats[result.exam_code] = {};
                   
@@ -64,7 +59,6 @@ export default function Home() {
           console.error("Failed to fetch synced scores:", err);
         }
       } else if (status !== 'loading') {
-        // 2. User is NOT logged in: Fallback to local browser storage
         const localScores = localStorage.getItem('ase_highscores');
         if (localScores) setHighScores(JSON.parse(localScores));
 
@@ -96,34 +90,39 @@ export default function Home() {
   };
 
   return (
-    <div className="max-w-4xl mx-auto p-8 text-black relative">
+    <div className="max-w-5xl mx-auto p-4 md:p-8 text-black dark:text-white transition-colors">
       
-      {/* Auth Header */}
-      <div className="absolute top-4 right-8 flex items-center gap-4 bg-gray-50 px-4 py-2 rounded-full border shadow-sm">
-        <Link href="/leaderboard" className="text-sm text-yellow-600 hover:underline font-bold border-r pr-3 border-gray-300">
+      {/* Clean Auth Header */}
+      <div className="flex flex-wrap justify-end items-center gap-4 mb-8 text-sm">
+        <Link href="/leaderboard" className="text-yellow-600 dark:text-yellow-500 hover:underline font-bold flex items-center gap-1">
           🏆 Leaderboard
         </Link>
+        <span className="text-gray-300 dark:text-gray-600">|</span>
         {session ? (
           <>
-            <Link href="/profile" className="font-medium text-gray-700 text-sm hover:underline">
-              Welcome, {session.user?.name || 'User'}!
+            <Link href="/profile" className="font-medium text-gray-700 dark:text-gray-300 hover:underline">
+              {session.user?.name || 'User'}
             </Link>
             {session.user?.email === 'rob.hampton93@gmail.com' && (
-              <Link href="/admin" className="text-sm text-purple-600 hover:underline font-bold border-l border-r px-3 border-gray-300">
-                Admin Panel
-              </Link>
+              <>
+                <span className="text-gray-300 dark:text-gray-600">|</span>
+                <Link href="/admin" className="text-purple-600 dark:text-purple-400 hover:underline font-bold">
+                  Admin
+                </Link>
+              </>
             )}
-            <button onClick={() => signOut()} className="text-sm text-red-600 hover:underline font-bold">Sign Out</button>
+            <span className="text-gray-300 dark:text-gray-600">|</span>
+            <button onClick={() => signOut()} className="text-red-600 dark:text-red-400 hover:underline font-bold">Sign Out</button>
           </>
         ) : (
-          <button onClick={() => signIn('google')} className="text-sm text-blue-600 hover:underline font-bold">
+          <button onClick={() => signIn('google')} className="text-blue-600 dark:text-blue-400 hover:underline font-bold">
             Sign in with Google
           </button>
         )}
       </div>
 
-      <h1 className="text-4xl font-bold mb-2 text-center mt-12">ASE Practice Platform</h1>
-      <p className="text-center text-gray-600 mb-10">Tap a certification area to view your stats and begin.</p>
+      <h1 className="text-3xl md:text-4xl font-bold mb-2 text-center">ASE Practice Platform</h1>
+      <p className="text-center text-gray-600 dark:text-gray-400 mb-10 text-sm md:text-base">Tap a certification area to view your stats and begin.</p>
       
       <div className="space-y-4 mb-12">
         {exams.map((exam) => {
@@ -142,71 +141,71 @@ export default function Home() {
           const weaknesses = topicEntries.filter(t => t.percentage < 80);
 
           return (
-            <div key={exam.code} className="border rounded-lg shadow-sm bg-white overflow-hidden transition-all">
+            <div key={exam.code} className="border dark:border-gray-700 rounded-lg shadow-sm bg-white dark:bg-gray-800 overflow-hidden transition-all">
               
               {/* Clickable Header */}
-              <div onClick={() => toggleExpand(exam.code)} className="p-6 cursor-pointer hover:bg-gray-50 flex justify-between items-center relative">
+              <div onClick={() => toggleExpand(exam.code)} className="p-4 md:p-6 cursor-pointer hover:bg-gray-50 dark:hover:bg-gray-700 flex justify-between items-center relative transition-colors">
                 {bestScore !== undefined && (
-                  <div className={`absolute top-0 right-0 px-3 py-1 text-xs font-bold text-white rounded-bl-lg ${bestScore >= 80 ? 'bg-green-500' : 'bg-yellow-500'}`}>
+                  <div className={`absolute top-0 right-0 px-3 py-1 text-xs font-bold text-white rounded-bl-lg ${bestScore >= 80 ? 'bg-green-500 dark:bg-green-600' : 'bg-yellow-500 dark:bg-yellow-600'}`}>
                     Best: {bestScore}%
                   </div>
                 )}
-                <div>
-                  <h2 className="text-xl font-bold text-blue-700">{exam.code}</h2>
-                  <p className="text-gray-700 font-medium">{exam.title}</p>
+                <div className="pr-8">
+                  <h2 className="text-lg md:text-xl font-bold text-blue-700 dark:text-blue-400">{exam.code}</h2>
+                  <p className="text-gray-700 dark:text-gray-300 font-medium text-sm md:text-base">{exam.title}</p>
                 </div>
-                <div className="text-gray-400 text-2xl">{isExpanded ? '▲' : '▼'}</div>
+                <div className="text-gray-400 dark:text-gray-500 text-xl md:text-2xl shrink-0">{isExpanded ? '▲' : '▼'}</div>
               </div>
 
               {/* Expanded Content */}
               {isExpanded && (
-                <div className="p-6 border-t bg-gray-50">
-                  <div className="flex gap-4 mb-8">
-                    <Link href={`/test/${exam.code}?mode=practice`} className="flex-1 text-center px-4 py-3 bg-blue-600 text-white rounded hover:bg-blue-700 font-bold transition-colors shadow-sm">
+                <div className="p-4 md:p-6 border-t dark:border-gray-700 bg-gray-50 dark:bg-gray-900/50 transition-colors">
+                  <div className="flex flex-col sm:flex-row gap-3 md:gap-4 mb-8">
+                    <Link href={`/test/${exam.code}?mode=practice`} className="flex-1 text-center px-4 py-3 bg-blue-600 dark:bg-blue-500 text-white rounded-lg hover:bg-blue-700 dark:hover:bg-blue-600 font-bold transition-colors shadow-sm">
                       Start Practice Mode
                     </Link>
-                    <Link href={`/test/${exam.code}?mode=exam`} className="flex-1 text-center px-4 py-3 bg-purple-600 text-white rounded hover:bg-purple-700 font-bold transition-colors shadow-sm">
+                    <Link href={`/test/${exam.code}?mode=exam`} className="flex-1 text-center px-4 py-3 bg-purple-600 dark:bg-purple-500 text-white rounded-lg hover:bg-purple-700 dark:hover:bg-purple-600 font-bold transition-colors shadow-sm">
                       Start Exam Mode
                     </Link>
                   </div>
 
-                  <h3 className="text-lg font-bold text-gray-800 mb-4 border-b pb-2">Category Breakdown</h3>
+                  <h3 className="text-base md:text-lg font-bold text-gray-800 dark:text-gray-200 mb-4 border-b dark:border-gray-700 pb-2">Category Breakdown</h3>
                   
                   {topicEntries.length === 0 ? (
-                    <p className="text-gray-500 italic text-sm">Complete a practice test to see your strengths and weaknesses here!</p>
+                    <p className="text-gray-500 dark:text-gray-400 italic text-sm">Complete a practice test to see your strengths and weaknesses here!</p>
                   ) : (
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                       
                       {/* Strengths */}
                       <div>
-                        <h4 className="text-sm font-bold text-green-700 mb-2 uppercase tracking-wider">Top Strengths</h4>
+                        <h4 className="text-xs md:text-sm font-bold text-green-700 dark:text-green-400 mb-2 uppercase tracking-wider">Top Strengths</h4>
                         <ul className="space-y-2">
                           {strengths.length > 0 ? strengths.map(s => (
-                            <li key={s.topic} className="flex justify-between items-center bg-white p-2 rounded border border-green-200 shadow-sm">
-                              <span className="text-sm font-medium text-gray-700 truncate mr-2" title={s.topic}>{s.topic}</span>
-                              <span className="font-bold text-green-600 text-sm">{s.percentage}%</span>
+                            <li key={s.topic} className="flex justify-between items-center bg-white dark:bg-gray-800 p-2 md:p-3 rounded border border-green-200 dark:border-green-900/50 shadow-sm transition-colors">
+                              <span className="text-xs md:text-sm font-medium text-gray-700 dark:text-gray-300 truncate mr-2" title={s.topic}>{s.topic}</span>
+                              <span className="font-bold text-green-600 dark:text-green-400 text-sm">{s.percentage}%</span>
                             </li>
-                          )) : <li className="text-gray-400 text-xs italic">Score 80% or higher in a category.</li>}
+                          )) : <li className="text-gray-400 dark:text-gray-500 text-xs italic">Score 80% or higher in a category.</li>}
                         </ul>
                       </div>
 
                       {/* Weaknesses */}
                       <div>
-                        <h4 className="text-sm font-bold text-red-700 mb-2 uppercase tracking-wider">Areas to Review</h4>
+                        <h4 className="text-xs md:text-sm font-bold text-red-700 dark:text-red-400 mb-2 uppercase tracking-wider">Areas to Review</h4>
                         <ul className="space-y-2">
                           {weaknesses.length > 0 ? weaknesses.map(w => (
-                            <li key={w.topic} className="flex justify-between items-center bg-white p-2 rounded border border-red-200 shadow-sm">
+                            <li key={w.topic} className="flex justify-between items-center bg-white dark:bg-gray-800 p-2 md:p-3 rounded border border-red-200 dark:border-red-900/50 shadow-sm transition-colors">
                               <div className="flex flex-col overflow-hidden mr-2">
-                                <span className="text-sm font-medium text-gray-700 truncate" title={w.topic}>{w.topic}</span>
+                                <span className="text-xs md:text-sm font-medium text-gray-700 dark:text-gray-300 truncate" title={w.topic}>{w.topic}</span>
                               </div>
-                              <div className="flex items-center gap-3 shrink-0">
-                                <span className="font-bold text-red-600 text-sm">{w.percentage}%</span>
-                                <Link href={`/test/${exam.code}?mode=practice&topic=${encodeURIComponent(w.topic)}`} className="bg-red-100 text-red-700 hover:bg-red-200 px-2 py-1 rounded text-xs font-bold transition-colors">
+                              <div className="flex items-center gap-2 md:gap-3 shrink-0">
+                                <span className="font-bold text-red-600 dark:text-red-400 text-sm">{w.percentage}%</span>
+                                <Link href={`/test/${exam.code}?mode=practice&topic=${encodeURIComponent(w.topic)}`} className="bg-red-100 dark:bg-red-900/30 text-red-700 dark:text-red-400 hover:bg-red-200 dark:hover:bg-red-900/50 px-2 py-1 rounded text-xs font-bold transition-colors border dark:border-red-800">
                                   Practice
                                 </Link>
                               </div>
                             </li>
-                          )) : <li className="text-gray-400 text-xs italic">No areas need improvement!</li>}
+                          )) : <li className="text-gray-400 dark:text-gray-500 text-xs italic">No areas need improvement!</li>}
                         </ul>
                       </div>
 

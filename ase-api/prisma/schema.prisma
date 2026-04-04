@@ -33,9 +33,12 @@ model questions {
 }
 
 model User {
-  id       Int          @id @default(autoincrement())
-  username String       @unique
-  results  ExamResult[]
+  id          Int          @id @default(autoincrement())
+  username    String       @unique
+  displayName String?      // NEW: Custom display name
+  shopName    String?      // NEW: Dealership or shop
+  isPublic    Boolean      @default(true) // NEW: Leaderboard privacy
+  results     ExamResult[]
 }
 
 model ExamResult {
