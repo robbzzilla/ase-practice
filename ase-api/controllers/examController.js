@@ -1,4 +1,5 @@
-const pool = require('../db'); // Import the database connection
+const { PrismaClient } = require('@prisma/client');
+const prisma = new PrismaClient();
 
 const generateExam = async (req, res) => {
   const { examCode } = req.params;
@@ -6,33 +7,36 @@ const generateExam = async (req, res) => {
   const questionLimit = 20;
 
   try {
-    let qResult;
-    
-    if (topic) {
-      qResult = await pool.query(
-        `SELECT q.id, q.stem_text, q.explanation_text, q.topic 
-         FROM questions q JOIN exams e ON q.exam_id = e.id
-         WHERE e.code = $1 AND q.topic = $2 AND q.active_flag = TRUE
-         ORDER BY RANDOM()
-         LIMIT $3`, [examCode, topic, questionLimit]
-      );
-    } else {
-      qResult = await pool.query(
-        `SELECT q.id, q.stem_text, q.explanation_text, q.topic 
-         FROM questions q JOIN exams e ON q.exam_id = e.id
-         WHERE e.code = $1 AND q.active_flag = TRUE
-         ORDER BY RANDOM()
-         LIMIT $2`, [examCode, questionLimit]
-      );
+    // 1. Find the exam ID
+    const exam = await prisma.exams.findUnique({
+      where: { code: examCode }
+    });
+
+    if (!exam) {
+      return res.status(404).json({ error: 'Exam not found' });
     }
-    
-    const questions = qResult.rows;
-    for (let q of questions) {
-      const cResult = await pool.query(
-        `SELECT id, choice_text, is_correct FROM question_choices WHERE question_id = $1 ORDER BY RANDOM()`, [q.id]
-      );
-      q.choices = cResult.rows;
-    }
+
+    // 2. Fetch questions AND their choices all at once using Prisma relations
+    let questions = await prisma.questions.findMany({
+      where: {
+        exam_id: exam.id,
+        active_flag: true,
+        ...(topic ? { topic: topic } : {}) // Only filter by topic if it exists in the URL
+      },
+      include: {
+        question_choices: true // Magically joins the choices table!
+      }
+    });
+
+    // 3. Shuffle the questions in JavaScript and pick the top 20
+    questions = questions.sort(() => 0.5 - Math.random()).slice(0, questionLimit);
+
+    // 4. Shuffle the multiple choices for each question so the correct answer moves around
+    questions.forEach(q => {
+      q.choices = q.question_choices.sort(() => 0.5 - Math.random());
+      delete q.question_choices; // Clean up the object name for the frontend
+    });
+
     res.json({ success: true, questions });
   } catch (err) {
     console.error(err);
@@ -40,7 +44,6 @@ const generateExam = async (req, res) => {
   }
 };
 
-// Export the function so the router can use it
 module.exports = {
   generateExam
 };
