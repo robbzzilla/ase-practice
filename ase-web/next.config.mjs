@@ -5,7 +5,7 @@ const withPWA = withPWAInit({
   cacheOnFrontEndNav: true,
   aggressiveFrontEndNavCaching: true,
   reloadOnOnline: true,
-  disable: process.env.NODE_ENV === "development", // Disables PWA in dev mode so it doesn't aggressively cache while you are coding
+  disable: process.env.NODE_ENV === "development", 
   workboxOptions: {
     disableDevLogs: true,
   },
@@ -13,6 +13,7 @@ const withPWA = withPWAInit({
 
 /** @type {import('next').NextConfig} */
 const nextConfig = {
+  turbopack: {}, // <-- THIS IS THE FIX!
   allowedDevOrigins: [
     '3000-cs-3bbf25b9-5421-4015-beb7-7b4357c2fdca.cs-us-central1-pits.cloudshell.dev',
     '127.0.0.1'

@@ -1,6 +1,7 @@
 'use client';
 import { useState, useEffect, useRef, use, Suspense } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
+import { useSession } from 'next-auth/react';
 
 // 1. Define the Database Types
 interface Choice {
@@ -24,6 +25,7 @@ interface ExamLogicProps {
 function ExamLogic({ examCode }: ExamLogicProps) {
   const router = useRouter();
   const searchParams = useSearchParams();
+  const { data: session } = useSession();
   
   const mode = searchParams.get('mode') || 'practice';
   const isExamMode = mode === 'exam';
@@ -111,16 +113,21 @@ function ExamLogic({ examCode }: ExamLogicProps) {
     return { correct, incorrect, total: questions.length, missed, topicBreakdown };
   };
 
+  // Save Scores
   useEffect(() => {
     if (isFinished && !isReviewMode) {
       const { correct, total, topicBreakdown } = calculateScore();
       const percentage = Math.round((correct / total) * 100);
       
+      // Always save recent test to local storage so the user sees what they just did
       const recentModeName = isExamMode ? 'Exam' : (topic ? 'Targeted Practice' : 'Practice');
       const recent = { examCode, percentage, mode: recentModeName };
       localStorage.setItem('ase_recent', JSON.stringify(recent));
 
+      // ONLY save to Database and High Scores if in EXAM MODE (and not a targeted subset)
       if (isExamMode && !topic) {
+        
+        // 1. Save to Local Storage (for immediate UI updates)
         const highScores = JSON.parse(localStorage.getItem('ase_highscores') || '{}');
         if (!highScores[examCode] || percentage > highScores[examCode]) {
           highScores[examCode] = percentage;
@@ -138,10 +145,25 @@ function ExamLogic({ examCode }: ExamLogicProps) {
           savedTopics[examCode][t].total += stats.total;
         });
         localStorage.setItem('ase_topics', JSON.stringify(savedTopics));
+
+        // 2. NEW: Send data to our backend API to save permanently in PostgreSQL
+        fetch('/api/scores', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            username: session?.user?.email || 'Guest', // <-- CRITICAL FIX
+            examCode: examCode,
+            percentage: percentage,
+            mode: recentModeName,
+            topicData: topicBreakdown
+          })
+        })
+        .then(res => res.json())
+        .then(data => console.log("Score saved to DB:", data))
+        .catch(err => console.error("Failed to save score:", err));
       }
     }
-  }, [isFinished, isReviewMode, isExamMode, examCode, topic]);
-
+  }, [isFinished, isReviewMode, isExamMode, examCode, topic, session]); // <-- Make sure session is in this array!
   const activeIndex = isReviewMode ? reviewIndices[reviewPosition] : currentIndex;
 
   const handleHint = () => {

@@ -52,9 +52,19 @@ export default function Home() {
       
       {/* Auth Header */}
       <div className="absolute top-4 right-8 flex items-center gap-4 bg-gray-50 px-4 py-2 rounded-full border shadow-sm">
+        
+        {/* NEW: Leaderboard Link */}
+        <Link href="/leaderboard" className="text-sm text-yellow-600 hover:underline font-bold border-r pr-3 border-gray-300">
+          🏆 Leaderboard
+        </Link>
+
         {session ? (
           <>
-            <span className="font-medium text-gray-700 text-sm">Welcome, {session.user?.name || 'User'}!</span>
+            {/* NEW: Profile Link (Clicking your name goes to your profile) */}
+            <Link href="/profile" className="font-medium text-gray-700 text-sm hover:underline">
+              Welcome, {session.user?.name || 'User'}!
+            </Link>
+            
             {session.user?.email === 'rob.hampton93@gmail.com' && (
               <Link href="/admin" className="text-sm text-purple-600 hover:underline font-bold border-l border-r px-3 border-gray-300">
                 Admin Panel

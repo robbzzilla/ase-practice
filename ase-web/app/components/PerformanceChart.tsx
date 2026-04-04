@@ -1,7 +1,18 @@
 'use client';
 import { Radar, RadarChart, PolarGrid, PolarAngleAxis, PolarRadiusAxis, ResponsiveContainer } from 'recharts';
 
-export default function PerformanceChart({ topicData }) {
+// 1. Define the blueprint for the incoming stats
+interface TopicStat {
+  correct: number;
+  total: number;
+}
+
+// 2. Define the blueprint for the component props
+interface PerformanceChartProps {
+  topicData: Record<string, TopicStat>;
+}
+
+export default function PerformanceChart({ topicData }: PerformanceChartProps) {
   // Format the data for Recharts
   const data = Object.entries(topicData).map(([topic, stats]) => ({
     subject: topic,
@@ -9,7 +20,7 @@ export default function PerformanceChart({ topicData }) {
     fullMark: 100,
   }));
 
-  if (data.length === 0) return <p>No data to display yet.</p>;
+  if (data.length === 0) return <p className="text-gray-500 italic text-sm">No data to display yet.</p>;
 
   return (
     <div className="w-full h-64 bg-white rounded-lg shadow-sm border p-4">
