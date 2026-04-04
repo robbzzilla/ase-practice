@@ -13,22 +13,27 @@ export default function AdminDashboard() {
   const [qCounts, setQCounts] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   
-  // Form State
+  // Manual Form State
   const [isFormOpen, setIsFormOpen] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
-  const [formData, setFormData] = useState({
-    examCode: 'A1',
-    topic: '',
-    difficulty: 'Medium',
-    stemText: '',
-    explanationText: '',
-  });
+  const [formData, setFormData] = useState({ examCode: 'A1', topic: '', difficulty: 'Medium', stemText: '', explanationText: '' });
   const [choices, setChoices] = useState([
-    { text: '', isCorrect: true },
-    { text: '', isCorrect: false },
-    { text: '', isCorrect: false },
-    { text: '', isCorrect: false },
+    { text: '', isCorrect: true }, { text: '', isCorrect: false }, { text: '', isCorrect: false }, { text: '', isCorrect: false }
   ]);
+
+  // AI Generator State
+  const [isAIOpen, setIsAIOpen] = useState(false);
+  const [isGenerating, setIsGenerating] = useState(false);
+  const [aiConfig, setAiConfig] = useState({ examCode: 'A1', topic: '', count: 3 });
+  const [generatedQuestions, setGeneratedQuestions] = useState<any[]>([]);
+
+  const fetchCounts = async () => {
+    try {
+      const res = await fetch('/api/admin/question-counts');
+      const data = await res.json();
+      if (data.success) setQCounts(data.counts);
+    } catch (err) { console.error(err); }
+  };
 
   useEffect(() => {
     if (status === 'loading') return;
@@ -39,10 +44,9 @@ export default function AdminDashboard() {
 
     Promise.all([
       fetch('/api/admin/stats').then(res => res.json()),
-      fetch('/api/admin/question-counts').then(res => res.json())
-    ]).then(([statsData, countsData]) => {
+      fetchCounts()
+    ]).then(([statsData]) => {
       if (statsData.success) setStats(statsData.stats);
-      if (countsData.success) setQCounts(countsData.counts);
       setLoading(false);
     }).catch(err => {
       console.error(err);
@@ -50,45 +54,83 @@ export default function AdminDashboard() {
     });
   }, [session, status, router]);
 
-  const handleChoiceChange = (index: number, text: string) => {
-    const newChoices = [...choices];
-    newChoices[index].text = text;
-    setChoices(newChoices);
-  };
-
-  const handleCorrectChange = (index: number) => {
-    const newChoices = choices.map((c, i) => ({ ...c, isCorrect: i === index }));
-    setChoices(newChoices);
-  };
-
+  // Handle Manual Submit
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setIsSubmitting(true);
-    
     try {
       const res = await fetch('/api/admin/questions', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ ...formData, choices })
       });
-      
       const data = await res.json();
       if (data.success) {
         toast.success('Question added to database!');
-        // Reset form
         setFormData({ ...formData, stemText: '', explanationText: '', topic: '' });
         setChoices([{ text: '', isCorrect: true }, { text: '', isCorrect: false }, { text: '', isCorrect: false }, { text: '', isCorrect: false }]);
-        // Refresh counts
-        const countsRes = await fetch('/api/admin/question-counts');
-        const countsData = await countsRes.json();
-        if (countsData.success) setQCounts(countsData.counts);
+        fetchCounts();
       } else {
         toast.error('Failed to add question.');
       }
-    } catch (err) {
-      toast.error('An error occurred.');
-    }
+    } catch (err) { toast.error('An error occurred.'); }
     setIsSubmitting(false);
+  };
+
+  // Handle AI Generation
+  const handleGenerateAI = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setIsGenerating(true);
+    setGeneratedQuestions([]);
+    const loadingToast = toast.loading('AI is writing questions...');
+    
+    try {
+      const res = await fetch('/api/admin/generate-ai', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(aiConfig)
+      });
+      const data = await res.json();
+      
+      if (data.success) {
+        setGeneratedQuestions(data.questions);
+        toast.success('Questions generated successfully!', { id: loadingToast });
+      } else {
+        toast.error(data.error || 'Failed to generate.', { id: loadingToast });
+      }
+    } catch (err) {
+      toast.error('Server error during generation.', { id: loadingToast });
+    }
+    setIsGenerating(false);
+  };
+
+  // Save an AI generated question to the DB
+  const saveAIQuestion = async (q: any, index: number) => {
+    const payload = {
+      examCode: aiConfig.examCode,
+      topic: aiConfig.topic || 'General',
+      difficulty: 'Medium',
+      stemText: q.stemText,
+      explanationText: q.explanationText,
+      choices: q.choices
+    };
+
+    try {
+      const res = await fetch('/api/admin/questions', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload)
+      });
+      const data = await res.json();
+      if (data.success) {
+        toast.success('Saved to database!');
+        // Remove it from the preview list
+        setGeneratedQuestions(prev => prev.filter((_, i) => i !== index));
+        fetchCounts();
+      } else {
+        toast.error('Failed to save.');
+      }
+    } catch (err) { toast.error('Error saving question.'); }
   };
 
   if (loading) return <div className="p-8 text-center dark:text-white">Loading Admin Dashboard...</div>;
@@ -123,24 +165,86 @@ export default function AdminDashboard() {
           <div className="bg-white dark:bg-gray-800 rounded-xl shadow-sm border dark:border-gray-700 p-6">
             <h2 className="text-xl font-bold dark:text-white mb-4">Question Bank Status</h2>
             <div className="space-y-3">
-              {qCounts.map(q => (
+              {qCounts.length > 0 ? qCounts.map(q => (
                 <div key={q.code} className="flex justify-between items-center p-3 bg-gray-50 dark:bg-gray-700/50 rounded border dark:border-gray-600">
                   <span className="font-bold text-blue-700 dark:text-blue-400">ASE {q.code}</span>
                   <span className="font-medium text-gray-700 dark:text-gray-300">{q.count} Questions</span>
                 </div>
-              ))}
+              )) : <p className="text-sm text-gray-500">No questions found.</p>}
             </div>
           </div>
         </div>
 
-        {/* Right Column: Expandable Add Question Form */}
-        <div className="lg:col-span-2">
+        {/* Right Column: Forms */}
+        <div className="lg:col-span-2 space-y-6">
+          
+          {/* AI Generator Form */}
+          <div className="bg-white dark:bg-gray-800 rounded-xl shadow-sm border border-blue-200 dark:border-blue-800 overflow-hidden">
+            <div 
+              className="p-6 border-b border-blue-100 dark:border-blue-900/50 flex justify-between items-center cursor-pointer hover:bg-blue-50 dark:hover:bg-blue-900/20 transition-colors"
+              onClick={() => setIsAIOpen(!isAIOpen)}
+            >
+              <h2 className="text-xl font-bold text-blue-700 dark:text-blue-400">🤖 Generate AI Questions</h2>
+              <span className="text-2xl text-blue-400">{isAIOpen ? '▲' : '▼'}</span>
+            </div>
+            
+            {isAIOpen && (
+              <div className="p-6 bg-blue-50/50 dark:bg-blue-900/10">
+                <form onSubmit={handleGenerateAI} className="space-y-4 mb-6">
+                  <div className="grid grid-cols-3 gap-4">
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Exam Area</label>
+                      <select value={aiConfig.examCode} onChange={e => setAiConfig({...aiConfig, examCode: e.target.value})} className="w-full p-2 border dark:border-gray-600 rounded bg-white dark:bg-gray-700 dark:text-white">
+                        {['A1','A2','A3','A4','A5','A6','A7','A8'].map(code => <option key={code} value={code}>{code}</option>)}
+                      </select>
+                    </div>
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Topic Focus</label>
+                      <input required type="text" value={aiConfig.topic} onChange={e => setAiConfig({...aiConfig, topic: e.target.value})} placeholder="e.g. Brakes" className="w-full p-2 border dark:border-gray-600 rounded bg-white dark:bg-gray-700 dark:text-white" />
+                    </div>
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Amount</label>
+                      <input type="number" min="1" max="10" value={aiConfig.count} onChange={e => setAiConfig({...aiConfig, count: parseInt(e.target.value)})} className="w-full p-2 border dark:border-gray-600 rounded bg-white dark:bg-gray-700 dark:text-white" />
+                    </div>
+                  </div>
+                  <button type="submit" disabled={isGenerating} className="w-full bg-blue-600 hover:bg-blue-700 text-white font-bold py-3 px-4 rounded transition-colors disabled:opacity-50">
+                    {isGenerating ? 'Generating...' : 'Generate Questions'}
+                  </button>
+                </form>
+
+                {/* AI Preview Area */}
+                {generatedQuestions.length > 0 && (
+                  <div className="space-y-6 border-t border-blue-200 dark:border-blue-800 pt-6">
+                    <h3 className="font-bold text-lg text-gray-800 dark:text-gray-200">Review & Approve</h3>
+                    {generatedQuestions.map((q, index) => (
+                      <div key={index} className="bg-white dark:bg-gray-800 p-4 rounded border dark:border-gray-600 shadow-sm">
+                        <p className="font-medium mb-3 dark:text-white">{q.stemText}</p>
+                        <div className="space-y-1 mb-3 pl-4">
+                          {q.choices.map((c: any, i: number) => (
+                            <p key={i} className={`text-sm ${c.isCorrect ? 'text-green-600 dark:text-green-400 font-bold' : 'text-gray-600 dark:text-gray-400'}`}>
+                              {c.isCorrect ? '✓ ' : '○ '}{c.text}
+                            </p>
+                          ))}
+                        </div>
+                        <p className="text-sm text-gray-500 dark:text-gray-400 italic mb-4">Exp: {q.explanationText}</p>
+                        <button onClick={() => saveAIQuestion(q, index)} className="bg-green-600 hover:bg-green-700 text-white text-sm font-bold py-2 px-4 rounded transition-colors">
+                          Approve & Save to DB
+                        </button>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+            )}
+          </div>
+
+          {/* Manual Add Question Form */}
           <div className="bg-white dark:bg-gray-800 rounded-xl shadow-sm border dark:border-gray-700 overflow-hidden">
             <div 
               className="p-6 border-b dark:border-gray-700 flex justify-between items-center cursor-pointer hover:bg-gray-50 dark:hover:bg-gray-700/50 transition-colors"
               onClick={() => setIsFormOpen(!isFormOpen)}
             >
-              <h2 className="text-xl font-bold dark:text-white">➕ Add New Question</h2>
+              <h2 className="text-xl font-bold dark:text-white">✍️ Manually Add Question</h2>
               <span className="text-2xl text-gray-400">{isFormOpen ? '▲' : '▼'}</span>
             </div>
             
@@ -150,53 +254,32 @@ export default function AdminDashboard() {
                   <div className="grid grid-cols-2 gap-4">
                     <div>
                       <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Exam Area</label>
-                      <select 
-                        value={formData.examCode} 
-                        onChange={e => setFormData({...formData, examCode: e.target.value})}
-                        className="w-full p-2 border dark:border-gray-600 rounded bg-white dark:bg-gray-700 dark:text-white"
-                      >
+                      <select value={formData.examCode} onChange={e => setFormData({...formData, examCode: e.target.value})} className="w-full p-2 border dark:border-gray-600 rounded bg-white dark:bg-gray-700 dark:text-white">
                         {['A1','A2','A3','A4','A5','A6','A7','A8'].map(code => <option key={code} value={code}>{code}</option>)}
                       </select>
                     </div>
                     <div>
                       <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Topic / Category</label>
-                      <input 
-                        required type="text" value={formData.topic} onChange={e => setFormData({...formData, topic: e.target.value})}
-                        placeholder="e.g. Engine Block Diagnosis"
-                        className="w-full p-2 border dark:border-gray-600 rounded bg-white dark:bg-gray-700 dark:text-white"
-                      />
+                      <input required type="text" value={formData.topic} onChange={e => setFormData({...formData, topic: e.target.value})} placeholder="e.g. Engine Block Diagnosis" className="w-full p-2 border dark:border-gray-600 rounded bg-white dark:bg-gray-700 dark:text-white" />
                     </div>
                   </div>
 
                   <div>
                     <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Question Text</label>
-                    <textarea 
-                      required rows={3} value={formData.stemText} onChange={e => setFormData({...formData, stemText: e.target.value})}
-                      className="w-full p-2 border dark:border-gray-600 rounded bg-white dark:bg-gray-700 dark:text-white"
-                    />
+                    <textarea required rows={3} value={formData.stemText} onChange={e => setFormData({...formData, stemText: e.target.value})} className="w-full p-2 border dark:border-gray-600 rounded bg-white dark:bg-gray-700 dark:text-white" />
                   </div>
 
                   <div>
-                    <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Explanation (Shown in Study Mode)</label>
-                    <textarea 
-                      required rows={2} value={formData.explanationText} onChange={e => setFormData({...formData, explanationText: e.target.value})}
-                      className="w-full p-2 border dark:border-gray-600 rounded bg-white dark:bg-gray-700 dark:text-white"
-                    />
+                    <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Explanation</label>
+                    <textarea required rows={2} value={formData.explanationText} onChange={e => setFormData({...formData, explanationText: e.target.value})} className="w-full p-2 border dark:border-gray-600 rounded bg-white dark:bg-gray-700 dark:text-white" />
                   </div>
 
                   <div className="space-y-2 pt-2">
                     <label className="block text-sm font-medium text-gray-700 dark:text-gray-300">Answer Choices (Select the correct one)</label>
                     {choices.map((choice, index) => (
                       <div key={index} className="flex items-center gap-3">
-                        <input 
-                          type="radio" name="correctAnswer" checked={choice.isCorrect} onChange={() => handleCorrectChange(index)}
-                          className="w-5 h-5 text-blue-600"
-                        />
-                        <input 
-                          required type="text" value={choice.text} onChange={e => handleChoiceChange(index, e.target.value)}
-                          placeholder={`Choice ${index + 1}`}
-                          className={`w-full p-2 border rounded bg-white dark:bg-gray-700 dark:text-white ${choice.isCorrect ? 'border-green-500 ring-1 ring-green-500' : 'dark:border-gray-600'}`}
-                        />
+                        <input type="radio" name="correctAnswer" checked={choice.isCorrect} onChange={() => handleCorrectChange(index)} className="w-5 h-5 text-blue-600" />
+                        <input required type="text" value={choice.text} onChange={e => handleChoiceChange(index, e.target.value)} placeholder={`Choice ${index + 1}`} className={`w-full p-2 border rounded bg-white dark:bg-gray-700 dark:text-white ${choice.isCorrect ? 'border-green-500 ring-1 ring-green-500' : 'dark:border-gray-600'}`} />
                       </div>
                     ))}
                   </div>
@@ -208,51 +291,6 @@ export default function AdminDashboard() {
               </div>
             )}
           </div>
-        </div>
-      </div>
-
-      {/* Recent Activity Table */}
-      <div className="bg-white dark:bg-gray-800 rounded-xl shadow-sm border dark:border-gray-700 overflow-hidden transition-colors">
-        <div className="p-6 border-b dark:border-gray-700">
-          <h2 className="text-xl font-bold dark:text-white">Recent Platform Activity</h2>
-        </div>
-        <div className="overflow-x-auto">
-          <table className="w-full text-left border-collapse">
-            <thead className="bg-gray-50 dark:bg-gray-900/50">
-              <tr>
-                <th className="p-4 font-semibold text-gray-600 dark:text-gray-400 border-b dark:border-gray-700">User</th>
-                <th className="p-4 font-semibold text-gray-600 dark:text-gray-400 border-b dark:border-gray-700">Exam</th>
-                <th className="p-4 font-semibold text-gray-600 dark:text-gray-400 border-b dark:border-gray-700">Mode</th>
-                <th className="p-4 font-semibold text-gray-600 dark:text-gray-400 border-b dark:border-gray-700">Score</th>
-                <th className="p-4 font-semibold text-gray-600 dark:text-gray-400 border-b dark:border-gray-700">Date</th>
-              </tr>
-            </thead>
-            <tbody>
-              {stats?.recentExams?.length > 0 ? (
-                stats.recentExams.map((exam: any) => (
-                  <tr key={exam.id} className="border-b dark:border-gray-700/50 last:border-0 hover:bg-gray-50 dark:hover:bg-gray-700/25 transition-colors">
-                    <td className="p-4 font-medium max-w-[150px] truncate" title={exam.user.username}>
-                      {exam.user.displayName || exam.user.username.split('@')[0]}
-                    </td>
-                    <td className="p-4 font-bold text-blue-600 dark:text-blue-400">ASE {exam.exam_code}</td>
-                    <td className="p-4 text-gray-600 dark:text-gray-300">{exam.mode}</td>
-                    <td className={`p-4 font-bold ${exam.score_percentage >= 70 ? 'text-green-600 dark:text-green-400' : 'text-red-600 dark:text-red-400'}`}>
-                      {exam.score_percentage}%
-                    </td>
-                    <td className="p-4 text-sm text-gray-500 dark:text-gray-400">
-                      {new Date(exam.created_at).toLocaleDateString()}
-                    </td>
-                  </tr>
-                ))
-              ) : (
-                <tr>
-                  <td colSpan={5} className="p-8 text-center text-gray-500 dark:text-gray-400 italic">
-                    No recent activity found.
-                  </td>
-                </tr>
-              )}
-            </tbody>
-          </table>
         </div>
       </div>
     </div>

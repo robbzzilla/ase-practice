@@ -1,10 +1,16 @@
 const express = require('express');
 const router = express.Router();
 const { PrismaClient } = require('@prisma/client');
+const { OpenAI } = require('openai');
 
 const prisma = new PrismaClient();
 
-// 1. GET /api/admin/stats (Existing stats)
+// Initialize OpenAI (Requires OPENAI_API_KEY environment variable)
+const openai = new OpenAI({
+  apiKey: process.env.OPENAI_API_KEY,
+});
+
+// 1. GET /api/admin/stats
 router.get('/stats', async (req, res) => {
   try {
     const totalUsers = await prisma.user.count();
@@ -32,7 +38,7 @@ router.get('/stats', async (req, res) => {
   }
 });
 
-// 2. GET /api/admin/question-counts (New: See how many questions per exam)
+// 2. GET /api/admin/question-counts
 router.get('/question-counts', async (req, res) => {
   try {
     const counts = await prisma.$queryRaw`
@@ -42,7 +48,6 @@ router.get('/question-counts', async (req, res) => {
       GROUP BY e.code
       ORDER BY e.code
     `;
-    // Convert BigInt to Number for JSON serialization
     const formatted = counts.map(c => ({ code: c.code, count: Number(c.count) }));
     res.json({ success: true, counts: formatted });
   } catch (err) {
@@ -51,17 +56,15 @@ router.get('/question-counts', async (req, res) => {
   }
 });
 
-// 3. POST /api/admin/questions (New: Insert a question from the UI)
+// 3. POST /api/admin/questions (Manual Insert)
 router.post('/questions', async (req, res) => {
   const { examCode, topic, difficulty, stemText, explanationText, choices } = req.body;
   
   try {
-    // Find the exam ID
     const exam = await prisma.$queryRaw`SELECT id FROM exams WHERE code = ${examCode}`;
     if (!exam || exam.length === 0) return res.status(404).json({error: 'Exam not found'});
     const examId = exam[0].id;
 
-    // Insert the question
     const newQuestion = await prisma.$queryRaw`
       INSERT INTO questions (exam_id, topic, difficulty_level, stem_text, explanation_text, active_flag)
       VALUES (${examId}, ${topic}, ${difficulty || 'Medium'}, ${stemText}, ${explanationText}, TRUE)
@@ -69,7 +72,6 @@ router.post('/questions', async (req, res) => {
     `;
     const questionId = newQuestion[0].id;
 
-    // Insert the 4 choices
     for (let choice of choices) {
       await prisma.$queryRaw`
         INSERT INTO question_choices (question_id, choice_text, is_correct)
@@ -81,6 +83,50 @@ router.post('/questions', async (req, res) => {
   } catch (err) {
     console.error("Insert error:", err);
     res.status(500).json({ error: 'Failed to add question' });
+  }
+});
+
+// 4. POST /api/admin/generate-ai (NEW: AI Generation)
+router.post('/generate-ai', async (req, res) => {
+  const { examCode, topic, count } = req.body;
+
+  if (!process.env.OPENAI_API_KEY) {
+    return res.status(500).json({ error: 'OpenAI API key is not configured on the server.' });
+  }
+
+  const prompt = `
+    You are an expert automotive instructor writing questions for the ASE ${examCode} certification exam.
+    Generate ${count || 3} multiple-choice questions focusing on the topic: "${topic || 'General'}".
+    
+    You MUST return your response as a valid JSON object containing a single array called "questions".
+    Each object in the "questions" array must have the following exact structure:
+    {
+      "stemText": "The actual question text",
+      "explanationText": "A detailed explanation of why the correct answer is right and the others are wrong",
+      "choices": [
+        { "text": "Choice A", "isCorrect": false },
+        { "text": "Choice B", "isCorrect": true },
+        { "text": "Choice C", "isCorrect": false },
+        { "text": "Choice D", "isCorrect": false }
+      ]
+    }
+    Ensure exactly one choice is true. Do not include any markdown formatting outside the JSON.
+  `;
+
+  try {
+    const completion = await openai.chat.completions.create({
+      model: "gpt-4o-mini", // Fast, cheap, and highly capable for this task
+      messages: [{ role: "user", content: prompt }],
+      response_format: { type: "json_object" } // Forces OpenAI to return valid JSON
+    });
+
+    const content = completion.choices[0].message.content;
+    const parsedData = JSON.parse(content);
+    
+    res.json({ success: true, questions: parsedData.questions });
+  } catch (err) {
+    console.error("AI Generation error:", err);
+    res.status(500).json({ error: 'Failed to generate questions with AI' });
   }
 });
 
