@@ -1,7 +1,7 @@
 const express = require('express');
 const router = express.Router();
 const { PrismaClient } = require('@prisma/client');
-const { GoogleGenAI } = require('@google/genai'); // NEW SDK
+const { GoogleGenAI } = require('@google/genai');
 
 const prisma = new PrismaClient();
 
@@ -46,7 +46,6 @@ router.post('/generate-ai', async (req, res) => {
   }
 
   try {
-    // Initialize the NEW SDK
     const ai = new GoogleGenAI({ apiKey: process.env.GEMINI_API_KEY });
 
     const prompt = `
@@ -68,7 +67,6 @@ router.post('/generate-ai', async (req, res) => {
       Ensure exactly one choice is true. Do not include any markdown formatting outside the JSON.
     `;
 
-    // Call the new SDK method with the model from the documentation
     const response = await ai.models.generateContent({
       model: "gemini-3-flash-preview",
       contents: prompt,
@@ -78,8 +76,7 @@ router.post('/generate-ai', async (req, res) => {
     });
 
     let responseText = response.text;
-    
-    // Clean up any accidental markdown
+
     responseText = responseText.replace(/```json/g, '').replace(/```/g, '').trim();
     
     const parsedData = JSON.parse(responseText);
