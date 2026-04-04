@@ -2,8 +2,8 @@
 import { useState, useEffect, useRef, use, Suspense } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { useSession } from 'next-auth/react';
+import toast from 'react-hot-toast';
 
-// 1. Define the Database Types
 interface Choice {
   id: number;
   choice_text: string;
@@ -31,7 +31,6 @@ function ExamLogic({ examCode }: ExamLogicProps) {
   const isExamMode = mode === 'exam';
   const topic = searchParams.get('topic'); 
   
-  // 2. Apply types to state
   const [questions, setQuestions] = useState<Question[]>([]);
   const [loading, setLoading] = useState<boolean>(true);
   
@@ -74,7 +73,8 @@ function ExamLogic({ examCode }: ExamLogicProps) {
   useEffect(() => {
     if (timeLeft === 0 && !isFinished) {
       setIsFinished(true);
-      alert("Time is up! Your exam has been automatically submitted.");
+      // REPLACED ALERT WITH TOAST
+      toast.error("Time is up! Your exam has been automatically submitted.", { icon: '⏱️', duration: 5000 });
     }
   }, [timeLeft, isFinished]);
 
@@ -113,7 +113,6 @@ function ExamLogic({ examCode }: ExamLogicProps) {
     return { correct, incorrect, total: questions.length, missed, topicBreakdown };
   };
 
-  // Save Scores
   useEffect(() => {
     if (isFinished && !isReviewMode) {
       const { correct, total, topicBreakdown } = calculateScore();
@@ -221,7 +220,8 @@ function ExamLogic({ examCode }: ExamLogicProps) {
 
   const startReview = (missedIndices: number[]) => {
     if (missedIndices.length === 0) {
-      alert("You got a perfect score! There are no missed questions to review.");
+      // REPLACED ALERT WITH TOAST
+      toast.success("You got a perfect score! There are no missed questions to review.", { icon: '🏆' });
       return;
     }
     setReviewIndices(missedIndices);
@@ -278,8 +278,7 @@ function ExamLogic({ examCode }: ExamLogicProps) {
         <div className="flex flex-col sm:flex-row justify-center gap-4">
           <button 
             onClick={() => startReview(missed)}
-            disabled={missed.length === 0}
-            className="bg-gray-600 dark:bg-gray-700 text-white px-6 py-3 rounded hover:bg-gray-700 dark:hover:bg-gray-600 transition-colors disabled:opacity-50"
+            className="bg-gray-600 dark:bg-gray-700 text-white px-6 py-3 rounded hover:bg-gray-700 dark:hover:bg-gray-600 transition-colors"
           >
             Review Missed Questions
           </button>
