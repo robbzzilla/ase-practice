@@ -119,15 +119,11 @@ function ExamLogic({ examCode }: ExamLogicProps) {
       const { correct, total, topicBreakdown } = calculateScore();
       const percentage = Math.round((correct / total) * 100);
       
-      // Always save recent test to local storage so the user sees what they just did
       const recentModeName = isExamMode ? 'Exam' : (topic ? 'Targeted Practice' : 'Practice');
       const recent = { examCode, percentage, mode: recentModeName };
       localStorage.setItem('ase_recent', JSON.stringify(recent));
 
-      // ONLY save to Database and High Scores if in EXAM MODE (and not a targeted subset)
       if (isExamMode && !topic) {
-        
-        // 1. Save to Local Storage (for immediate UI updates)
         const highScores = JSON.parse(localStorage.getItem('ase_highscores') || '{}');
         if (!highScores[examCode] || percentage > highScores[examCode]) {
           highScores[examCode] = percentage;
@@ -146,7 +142,7 @@ function ExamLogic({ examCode }: ExamLogicProps) {
         });
         localStorage.setItem('ase_topics', JSON.stringify(savedTopics));
 
-        // 2. NEW: Send data to our backend API to save permanently in PostgreSQL
+        // ---> NEW: Send data to our backend API to save permanently in PostgreSQL <---
         fetch('/api/scores', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
@@ -163,7 +159,8 @@ function ExamLogic({ examCode }: ExamLogicProps) {
         .catch(err => console.error("Failed to save score:", err));
       }
     }
-  }, [isFinished, isReviewMode, isExamMode, examCode, topic, session]); // <-- Make sure session is in this array!
+  }, [isFinished, isReviewMode, isExamMode, examCode, topic, session]); // <-- Added session to this array!
+  
   const activeIndex = isReviewMode ? reviewIndices[reviewPosition] : currentIndex;
 
   const handleHint = () => {
