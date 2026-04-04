@@ -1,0 +1,50 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model exams {
+  id        Int         @id @default(autoincrement())
+  code      String      @unique @db.VarChar(10)
+  questions questions[]
+}
+
+model question_choices {
+  id          Int        @id @default(autoincrement())
+  question_id Int?
+  choice_text String
+  is_correct  Boolean
+  questions   questions? @relation(fields: [question_id], references: [id], onDelete: NoAction, onUpdate: NoAction)
+}
+
+model questions {
+  id               Int                @id @default(autoincrement())
+  exam_id          Int?
+  stem_text        String
+  explanation_text String?
+  topic            String?
+  active_flag      Boolean?           @default(true)
+  question_choices question_choices[]
+  exams            exams?             @relation(fields: [exam_id], references: [id], onDelete: NoAction, onUpdate: NoAction)
+}
+
+model User {
+  id       Int          @id @default(autoincrement())
+  username String       @unique
+  results  ExamResult[]
+}
+
+model ExamResult {
+  id               Int      @id @default(autoincrement())
+  user_id          Int
+  exam_code        String
+  score_percentage Int
+  mode             String
+  topic_data       Json?
+  created_at       DateTime @default(now())
+  user             User     @relation(fields: [user_id], references: [id])
+}
