@@ -17,27 +17,11 @@ export default function ClientWrapper({ children }: { children: React.ReactNode 
 
   return (
     <SessionProvider>
-      <Toaster 
-        position="bottom-center" 
-        toastOptions={{
-          className: 'dark:bg-gray-800 dark:text-white border dark:border-gray-700',
-          duration: 4000,
-        }} 
-      />
+      <Toaster position="bottom-center" toastOptions={{ className: 'dark:bg-gray-800 dark:text-white border dark:border-gray-700', duration: 4000 }} />
       <header className="bg-white dark:bg-gray-800 shadow-sm border-b dark:border-gray-700 p-4">
         <div className="max-w-6xl mx-auto flex flex-col md:flex-row justify-between items-center gap-4">
-          <Link href="/" className="text-2xl font-bold text-blue-600 dark:text-blue-400">
-            ASE Practice
-          </Link>
-          
+          <Link href="/" className="text-2xl font-bold text-blue-600 dark:text-blue-400">ASE Practice</Link>
           <div className="flex items-center gap-6">
-            <div className="flex items-center gap-2">
-              <div className="w-8 h-8 bg-blue-100 dark:bg-blue-900 rounded-full flex items-center justify-center text-blue-700 dark:text-blue-300 font-bold">
-                RH
-              </div>
-              <span className="font-medium max-w-[100px] md:max-w-full truncate">Rob Hampton</span>
-            </div>
-
             <label className="flex items-center cursor-pointer">
               <div className="relative">
                 <input type="checkbox" className="sr-only" checked={isDarkMode} onChange={() => setIsDarkMode(!isDarkMode)} />
@@ -49,10 +33,7 @@ export default function ClientWrapper({ children }: { children: React.ReactNode 
           </div>
         </div>
       </header>
-
-      <main className="p-4 md:p-8">
-        {children}
-      </main>
+      <main className="p-4 md:p-8">{children}</main>
     </SessionProvider>
   );
 }

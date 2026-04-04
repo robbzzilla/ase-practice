@@ -3,12 +3,13 @@ import ClientWrapper from './ClientWrapper';
 import "./globals.css";
 
 export const metadata: Metadata = {
+  metadataBase: new URL('https://ase-web-111944353412.us-central1.run.app'),
   title: 'ASE Practice Platform',
   description: 'Master your ASE certification exams with our interactive practice tests, detailed explanations, and global leaderboard.',
   openGraph: {
     title: 'ASE Practice Platform',
     description: 'Master your ASE certification exams with our interactive practice tests, detailed explanations, and global leaderboard.',
-    url: 'https://ase-web-111944353412.us-central1.run.app',
+    url: '/',
     siteName: 'ASE Practice',
     images: [
       {
@@ -20,12 +21,6 @@ export const metadata: Metadata = {
     ],
     locale: 'en_US',
     type: 'website',
-  },
-  twitter: {
-    card: 'summary_large_image',
-    title: 'ASE Practice Platform',
-    description: 'Master your ASE certification exams with our interactive practice tests.',
-    images: ['/og-image.jpg'],
   },
 };
 
