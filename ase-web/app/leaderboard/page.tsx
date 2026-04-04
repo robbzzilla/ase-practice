@@ -2,7 +2,6 @@
 import { useState, useEffect } from 'react';
 import Link from 'next/link';
 
-// Define the blueprint for a leaderboard entry
 interface LeaderboardEntry {
   id: number;
   score_percentage: number;
@@ -15,17 +14,27 @@ interface LeaderboardEntry {
 export default function LeaderboardPage() {
   const [leaders, setLeaders] = useState<LeaderboardEntry[]>([]);
   const [loading, setLoading] = useState<boolean>(true);
+  const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
     fetch('/api/gamify/leaderboard')
-      .then(res => res.json())
+      .then(res => {
+        if (!res.ok) throw new Error('Server returned an error');
+        return res.json();
+      })
       .then(data => {
         if (data.success) setLeaders(data.leaderboard);
+        setLoading(false);
+      })
+      .catch(err => {
+        console.error("Fetch error:", err);
+        setError("Failed to load leaderboard. Make sure the backend API is deployed!");
         setLoading(false);
       });
   }, []);
 
   if (loading) return <div className="p-8 text-center">Loading Global Rankings...</div>;
+  if (error) return <div className="p-8 text-center text-red-600 font-bold">{error}</div>;
 
   return (
     <div className="max-w-3xl mx-auto p-8 text-black">

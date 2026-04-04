@@ -14,19 +14,67 @@ interface TopicStat {
 }
 
 export default function Home() {
-  const { data: session } = useSession();
+  const { data: session, status } = useSession();
   const [expandedExam, setExpandedExam] = useState<string | null>(null);
   
   const [highScores, setHighScores] = useState<Record<string, number>>({});
   const [topicStats, setTopicStats] = useState<Record<string, Record<string, TopicStat>>>({});
 
+  // NEW: Smart Data Loading (Database Syncing)
   useEffect(() => {
-    const scores = localStorage.getItem('ase_highscores');
-    if (scores) setHighScores(JSON.parse(scores));
+    const loadData = async () => {
+      if (session?.user?.email) {
+        // 1. User is logged in: Fetch permanent data from PostgreSQL
+        try {
+          const res = await fetch(`/api/scores/${session.user.email}`);
+          const data = await res.json();
+          
+          if (data.success && data.results) {
+            const dbHighScores: Record<string, number> = {};
+            const dbTopicStats: Record<string, Record<string, TopicStat>> = {};
 
-    const topics = localStorage.getItem('ase_topics');
-    if (topics) setTopicStats(JSON.parse(topics));
-  }, []);
+            data.results.forEach((result: any) => {
+              // Only calculate official 'Exam' mode attempts
+              if (result.mode === 'Exam') {
+                
+                // Calculate High Scores
+                if (!dbHighScores[result.exam_code] || result.score_percentage > dbHighScores[result.exam_code]) {
+                  dbHighScores[result.exam_code] = result.score_percentage;
+                }
+
+                // Calculate Topic Stats
+                if (result.topic_data) {
+                  if (!dbTopicStats[result.exam_code]) dbTopicStats[result.exam_code] = {};
+                  
+                  Object.entries(result.topic_data).forEach(([topic, stats]: [string, any]) => {
+                    if (!dbTopicStats[result.exam_code][topic]) {
+                      dbTopicStats[result.exam_code][topic] = { correct: 0, total: 0 };
+                    }
+                    dbTopicStats[result.exam_code][topic].correct += stats.correct;
+                    dbTopicStats[result.exam_code][topic].total += stats.total;
+                  });
+                }
+              }
+            });
+
+            setHighScores(dbHighScores);
+            setTopicStats(dbTopicStats);
+          }
+        } catch (err) {
+          console.error("Failed to fetch synced scores:", err);
+        }
+      } else if (status !== 'loading') {
+        // 2. User is NOT logged in: Fallback to local browser storage
+        const localScores = localStorage.getItem('ase_highscores');
+        if (localScores) setHighScores(JSON.parse(localScores));
+
+        const localTopics = localStorage.getItem('ase_topics');
+        if (localTopics) setTopicStats(JSON.parse(localTopics));
+      }
+    };
+
+    loadData();
+  }, [session, status]);
 
   const exams: Exam[] = [
     { code: 'A1', title: 'Engine Repair' },
@@ -52,19 +100,14 @@ export default function Home() {
       
       {/* Auth Header */}
       <div className="absolute top-4 right-8 flex items-center gap-4 bg-gray-50 px-4 py-2 rounded-full border shadow-sm">
-        
-        {/* NEW: Leaderboard Link */}
         <Link href="/leaderboard" className="text-sm text-yellow-600 hover:underline font-bold border-r pr-3 border-gray-300">
           🏆 Leaderboard
         </Link>
-
         {session ? (
           <>
-            {/* NEW: Profile Link (Clicking your name goes to your profile) */}
             <Link href="/profile" className="font-medium text-gray-700 text-sm hover:underline">
               Welcome, {session.user?.name || 'User'}!
             </Link>
-            
             {session.user?.email === 'rob.hampton93@gmail.com' && (
               <Link href="/admin" className="text-sm text-purple-600 hover:underline font-bold border-l border-r px-3 border-gray-300">
                 Admin Panel
