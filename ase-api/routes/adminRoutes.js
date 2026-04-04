@@ -47,8 +47,10 @@ router.post('/generate-ai', async (req, res) => {
 
   try {
     const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY);
+    
+    // FIX: Changed model name to gemini-1.5-flash-latest
     const model = genAI.getGenerativeModel({ 
-      model: "gemini-1.5-flash",
+      model: "gemini-1.5-flash-latest",
       generationConfig: { responseMimeType: "application/json" }
     });
 
@@ -74,7 +76,6 @@ router.post('/generate-ai', async (req, res) => {
     const result = await model.generateContent(prompt);
     let responseText = result.response.text();
     
-    // BULLETPROOF PARSER: Strip out markdown code blocks if Gemini includes them
     responseText = responseText.replace(/```json/g, '').replace(/```/g, '').trim();
     
     const parsedData = JSON.parse(responseText);
