@@ -1,17 +1,20 @@
 FROM node:18-alpine
 WORKDIR /usr/src/app
 
-# 1. Copy package files AND the prisma schema first
+# 1. Install OpenSSL (Required for Prisma on Alpine Linux)
+RUN apk add --no-cache openssl
+
+# 2. Copy package files AND the prisma schema
 COPY package*.json ./
 COPY prisma ./prisma/
 
-# 2. Install dependencies
+# 3. Install dependencies
 RUN npm install
 
-# 3. Generate the Prisma client explicitly
+# 4. Generate the Prisma client explicitly
 RUN npx prisma generate
 
-# 4. Copy the rest of your API code
+# 5. Copy the rest of your API code
 COPY . .
 
 EXPOSE 8080
