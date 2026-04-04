@@ -1,7 +1,7 @@
 const express = require('express');
 const router = express.Router();
 const { PrismaClient } = require('@prisma/client');
-const { GoogleGenerativeAI } = require('@google/generative-ai');
+const { GoogleGenAI } = require('@google/genai'); // NEW SDK
 
 const prisma = new PrismaClient();
 
@@ -46,13 +46,8 @@ router.post('/generate-ai', async (req, res) => {
   }
 
   try {
-    const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY);
-    
-    // FIX: Using the standard gemini-1.5-flash model without the -latest tag
-    const model = genAI.getGenerativeModel({ 
-      model: "gemini-1.5-flash",
-      generationConfig: { responseMimeType: "application/json" }
-    });
+    // Initialize the NEW SDK
+    const ai = new GoogleGenAI({ apiKey: process.env.GEMINI_API_KEY });
 
     const prompt = `
       You are an expert automotive instructor writing questions for the ASE ${examCode} certification exam.
@@ -73,9 +68,18 @@ router.post('/generate-ai', async (req, res) => {
       Ensure exactly one choice is true. Do not include any markdown formatting outside the JSON.
     `;
 
-    const result = await model.generateContent(prompt);
-    let responseText = result.response.text();
+    // Call the new SDK method with the model from the documentation
+    const response = await ai.models.generateContent({
+      model: "gemini-3-flash-preview",
+      contents: prompt,
+      config: {
+        responseMimeType: "application/json"
+      }
+    });
+
+    let responseText = response.text;
     
+    // Clean up any accidental markdown
     responseText = responseText.replace(/```json/g, '').replace(/```/g, '').trim();
     
     const parsedData = JSON.parse(responseText);
