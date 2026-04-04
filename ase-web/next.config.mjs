@@ -1,8 +1,21 @@
+import withPWAInit from "@ducanh2912/next-pwa";
+
+const withPWA = withPWAInit({
+  dest: "public",
+  cacheOnFrontEndNav: true,
+  aggressiveFrontEndNavCaching: true,
+  reloadOnOnline: true,
+  disable: process.env.NODE_ENV === "development", // Disables PWA in dev mode so it doesn't aggressively cache while you are coding
+  workboxOptions: {
+    disableDevLogs: true,
+  },
+});
+
 /** @type {import('next').NextConfig} */
 const nextConfig = {
   allowedDevOrigins: [
     '3000-cs-3bbf25b9-5421-4015-beb7-7b4357c2fdca.cs-us-central1-pits.cloudshell.dev',
-    '127.0.0.1' // <-- Add this line right here!
+    '127.0.0.1'
   ],
   async rewrites() {
     return [
@@ -26,4 +39,4 @@ const nextConfig = {
   }
 };
 
-export default nextConfig;
+export default withPWA(nextConfig);
