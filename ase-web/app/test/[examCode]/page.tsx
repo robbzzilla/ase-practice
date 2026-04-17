@@ -18,17 +18,14 @@ interface Question {
   choices: Choice[];
 }
 
-interface ExamLogicProps {
-  examCode: string;
-}
-
-function ExamLogic({ examCode }: ExamLogicProps) {
+function ExamLogic({ examCode }: { examCode: string }) {
   const router = useRouter();
   const searchParams = useSearchParams();
   const { data: session } = useSession();
   
   const mode = searchParams.get('mode') || 'practice';
   const isExamMode = mode === 'exam';
+  const isArcadeMode = mode === 'arcade';
   const topic = searchParams.get('topic'); 
   
   const [questions, setQuestions] = useState<Question[]>([]);
@@ -43,6 +40,7 @@ function ExamLogic({ examCode }: ExamLogicProps) {
   const [reviewIndices, setReviewIndices] = useState<number[]>([]); 
   const [reviewPosition, setReviewPosition] = useState<number>(0); 
   
+  // Timer State: Total time for Exam, Per-Question time for Arcade
   const [timeLeft, setTimeLeft] = useState<number | null>(null);
   const [eliminatedChoices, setEliminatedChoices] = useState<Record<number, number[]>>({}); 
   
@@ -57,26 +55,32 @@ function ExamLogic({ examCode }: ExamLogicProps) {
       .then(data => {
         if (data.success) {
           setQuestions(data.questions);
-          if (isExamMode) setTimeLeft(data.questions.length * 120);
+          if (isExamMode) setTimeLeft(data.questions.length * 120); // 2 mins per question total
+          if (isArcadeMode) setTimeLeft(30); // 30 seconds to start Arcade Mode
         }
         setLoading(false);
       })
       .catch(err => console.error(err));
-  }, [examCode, isExamMode, topic]);
+  }, [examCode, isExamMode, isArcadeMode, topic]);
 
+  // Timer Countdown Logic
   useEffect(() => {
     if (timeLeft === null || timeLeft <= 0 || isFinished || isReviewMode) return;
     const timerId = setInterval(() => setTimeLeft(prev => (prev !== null ? prev - 1 : null)), 1000);
     return () => clearInterval(timerId);
   }, [timeLeft, isFinished, isReviewMode]);
 
+  // Time Up Logic
   useEffect(() => {
     if (timeLeft === 0 && !isFinished) {
       setIsFinished(true);
-      // REPLACED ALERT WITH TOAST
-      toast.error("Time is up! Your exam has been automatically submitted.", { icon: '⏱️', duration: 5000 });
+      if (isArcadeMode) {
+        toast.error("Time's up! Arcade run finished.", { icon: '⏱️', duration: 5000 });
+      } else {
+        toast.error("Time is up! Your exam has been automatically submitted.", { icon: '⏱️', duration: 5000 });
+      }
     }
-  }, [timeLeft, isFinished]);
+  }, [timeLeft, isFinished, isArcadeMode]);
 
   const formatTime = (seconds: number | null) => {
     if (seconds === null) return "";
@@ -91,7 +95,11 @@ function ExamLogic({ examCode }: ExamLogicProps) {
     let missed: number[] = []; 
     let topicBreakdown: Record<string, { correct: number, total: number }> = {}; 
     
-    questions.forEach((q, index) => {
+    // Only grade questions that were actually answered (useful for finishing early)
+    const answeredCount = Object.keys(userAnswers).length;
+    const totalToGrade = isExamMode ? questions.length : Math.max(answeredCount, 1);
+
+    questions.slice(0, totalToGrade).forEach((q, index) => {
       const selectedChoiceId = userAnswers[index];
       const correctChoice = q.choices.find(c => c.is_correct);
       const isCorrect = selectedChoiceId === correctChoice?.id;
@@ -99,7 +107,6 @@ function ExamLogic({ examCode }: ExamLogicProps) {
       if (!topicBreakdown[q.topic]) {
         topicBreakdown[q.topic] = { correct: 0, total: 0 };
       }
-      
       topicBreakdown[q.topic].total++;
 
       if (isCorrect) {
@@ -110,67 +117,36 @@ function ExamLogic({ examCode }: ExamLogicProps) {
         missed.push(index);
       }
     });
-    return { correct, incorrect, total: questions.length, missed, topicBreakdown };
+    return { correct, incorrect, total: totalToGrade, missed, topicBreakdown };
   };
 
+  // Save Scores (Now saves Practice and Arcade modes too)
   useEffect(() => {
     if (isFinished && !isReviewMode) {
       const { correct, total, topicBreakdown } = calculateScore();
       const percentage = Math.round((correct / total) * 100);
       
-      const recentModeName = isExamMode ? 'Exam' : (topic ? 'Targeted Practice' : 'Practice');
-      const recent = { examCode, percentage, mode: recentModeName };
-      localStorage.setItem('ase_recent', JSON.stringify(recent));
+      let recentModeName = 'Practice';
+      if (isExamMode) recentModeName = 'Exam';
+      if (isArcadeMode) recentModeName = 'Arcade';
+      if (topic) recentModeName = 'Targeted Practice';
 
-      if (isExamMode && !topic) {
-        const highScores = JSON.parse(localStorage.getItem('ase_highscores') || '{}');
-        if (!highScores[examCode] || percentage > highScores[examCode]) {
-          highScores[examCode] = percentage;
-          localStorage.setItem('ase_highscores', JSON.stringify(highScores));
-        }
-
-        const savedTopics = JSON.parse(localStorage.getItem('ase_topics') || '{}');
-        if (!savedTopics[examCode]) savedTopics[examCode] = {}; 
-        
-        Object.entries(topicBreakdown).forEach(([t, stats]) => {
-          if (!savedTopics[examCode][t]) {
-            savedTopics[examCode][t] = { correct: 0, total: 0 };
-          }
-          savedTopics[examCode][t].correct += stats.correct;
-          savedTopics[examCode][t].total += stats.total;
-        });
-        localStorage.setItem('ase_topics', JSON.stringify(savedTopics));
-
-        fetch('/api/scores', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            username: session?.user?.email || 'Guest',
-            examCode: examCode,
-            percentage: percentage,
-            mode: recentModeName,
-            topicData: topicBreakdown
-          })
+      // Save to DB for ALL modes so the user can track their weak points
+      fetch('/api/scores', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          username: session?.user?.email || 'Guest',
+          examCode: examCode,
+          percentage: percentage,
+          mode: recentModeName,
+          topicData: topicBreakdown
         })
-        .then(res => res.json())
-        .then(data => console.log("Score saved to DB:", data))
-        .catch(err => console.error("Failed to save score:", err));
-      }
+      }).catch(err => console.error("Failed to save score:", err));
     }
-  }, [isFinished, isReviewMode, isExamMode, examCode, topic, session]);
+  }, [isFinished, isReviewMode, isExamMode, isArcadeMode, examCode, topic, session]);
   
   const activeIndex = isReviewMode ? reviewIndices[reviewPosition] : currentIndex;
-
-  const handleHint = () => {
-    if (eliminatedChoices[activeIndex]) return; 
-    const currentQ = questions[activeIndex];
-    const incorrectChoices = currentQ.choices.filter(c => !c.is_correct);
-    
-    const shuffled = incorrectChoices.sort(() => 0.5 - Math.random());
-    const toEliminate = shuffled.slice(0, 2).map(c => c.id);
-    
-    setEliminatedChoices(prev => ({ ...prev, [activeIndex]: toEliminate }));
-  };
 
   const handleSelectAnswer = (choiceId: number) => {
     if (isReviewMode) return;
@@ -180,6 +156,20 @@ function ExamLogic({ examCode }: ExamLogicProps) {
 
   const handleCheckAnswer = () => {
     setCheckedQuestions(prev => ({ ...prev, [activeIndex]: true }));
+    
+    // Arcade Mode Bonus Time Logic
+    if (isArcadeMode) {
+      const currentQ = questions[activeIndex];
+      const correctChoice = currentQ.choices.find(c => c.is_correct);
+      if (userAnswers[activeIndex] === correctChoice?.id) {
+        setTimeLeft(prev => (prev !== null ? prev + 15 : null)); // +15 seconds for correct answer
+        toast.success("+15 Seconds!", { icon: '⏱️', position: 'top-right' });
+      } else {
+        setTimeLeft(prev => (prev !== null ? Math.max(prev - 5, 0) : null)); // -5 seconds penalty
+        toast.error("-5 Seconds Penalty", { icon: '⚠️', position: 'top-right' });
+      }
+    }
+
     setTimeout(() => {
       bottomRef.current?.scrollIntoView({ behavior: 'smooth' });
     }, 100);
@@ -204,35 +194,14 @@ function ExamLogic({ examCode }: ExamLogicProps) {
     }
   };
 
-  const handleBack = () => {
-    if (isReviewMode) {
-      if (reviewPosition > 0) {
-        setReviewPosition(reviewPosition - 1);
-        window.scrollTo({ top: 0, behavior: 'smooth' });
-      }
-    } else {
-      if (currentIndex > 0) {
-        setCurrentIndex(currentIndex - 1);
-        window.scrollTo({ top: 0, behavior: 'smooth' });
-      }
+  const handleFinishEarly = () => {
+    if (confirm("Are you sure you want to finish early? Your score will be calculated based on answered questions.")) {
+      setIsFinished(true);
     }
-  };
-
-  const startReview = (missedIndices: number[]) => {
-    if (missedIndices.length === 0) {
-      // REPLACED ALERT WITH TOAST
-      toast.success("You got a perfect score! There are no missed questions to review.", { icon: '🏆' });
-      return;
-    }
-    setReviewIndices(missedIndices);
-    setReviewPosition(0);
-    setIsFinished(false);
-    setIsReviewMode(true);
-    window.scrollTo({ top: 0, behavior: 'smooth' });
   };
 
   if (loading) return <div className="p-8 text-center dark:text-gray-200">Loading ASE {examCode} Data...</div>;
-  if (questions.length === 0) return <div className="p-8 text-center dark:text-gray-200">No questions found for this selection.</div>;
+  if (questions.length === 0) return <div className="p-8 text-center dark:text-gray-200">No questions found.</div>;
 
   if (isFinished) {
     const { correct, incorrect, total, missed, topicBreakdown } = calculateScore();
@@ -240,52 +209,16 @@ function ExamLogic({ examCode }: ExamLogicProps) {
     
     return (
       <div className="max-w-2xl mx-auto p-4 md:p-8 mt-4 md:mt-10 bg-white dark:bg-gray-800 rounded-xl shadow-md text-center transition-colors">
-        <h1 className="text-2xl md:text-3xl font-bold mb-2 text-gray-900 dark:text-white">{isExamMode ? 'Exam Complete!' : 'Practice Complete!'}</h1>
-        
-        {!isExamMode && (
-          <p className="text-xs md:text-sm text-orange-600 dark:text-orange-400 font-bold mb-4 bg-orange-50 dark:bg-orange-900/20 inline-block px-3 py-1 rounded border border-orange-200 dark:border-orange-800">
-            Practice scores are not saved to your Performance Profile.
-          </p>
-        )}
-
+        <h1 className="text-2xl md:text-3xl font-bold mb-2 text-gray-900 dark:text-white">
+          {isExamMode ? 'Exam Complete!' : isArcadeMode ? 'Arcade Run Over!' : 'Practice Complete!'}
+        </h1>
         <div className="text-5xl md:text-6xl font-bold mb-4 text-blue-600 dark:text-blue-400">{percentage}%</div>
-        
         <div className="flex justify-center gap-8 mb-8 text-lg md:text-xl border-b dark:border-gray-700 pb-6">
           <div className="text-green-600 dark:text-green-400 font-semibold">Correct: {correct}</div>
           <div className="text-red-600 dark:text-red-400 font-semibold">Incorrect: {incorrect}</div>
         </div>
-
-        <div className="mb-8 text-left">
-          <h2 className="text-lg md:text-xl font-bold mb-4 text-gray-800 dark:text-gray-200">Performance by Category</h2>
-          <div className="space-y-3">
-            {Object.entries(topicBreakdown).map(([t, stats]) => {
-              const topicPercent = Math.round((stats.correct / stats.total) * 100);
-              return (
-                <div key={t} className="flex flex-col md:flex-row justify-between md:items-center bg-gray-50 dark:bg-gray-700/50 p-3 rounded border dark:border-gray-600 gap-2 md:gap-0">
-                  <span className="font-medium text-gray-700 dark:text-gray-300 text-sm md:text-base">{t}</span>
-                  <div className="flex items-center justify-between md:justify-end gap-4 w-full md:w-auto">
-                    <span className="text-sm text-gray-500 dark:text-gray-400">{stats.correct} / {stats.total}</span>
-                    <span className={`font-bold w-12 text-right ${topicPercent >= 80 ? 'text-green-600 dark:text-green-400' : topicPercent >= 60 ? 'text-yellow-600 dark:text-yellow-400' : 'text-red-600 dark:text-red-400'}`}>
-                      {topicPercent}%
-                    </span>
-                  </div>
-                </div>
-              );
-            })}
-          </div>
-        </div>
-
         <div className="flex flex-col sm:flex-row justify-center gap-4">
-          <button 
-            onClick={() => startReview(missed)}
-            className="bg-gray-600 dark:bg-gray-700 text-white px-6 py-3 rounded hover:bg-gray-700 dark:hover:bg-gray-600 transition-colors"
-          >
-            Review Missed Questions
-          </button>
-          <button 
-            onClick={() => router.push('/')}
-            className="bg-blue-600 dark:bg-blue-500 text-white px-6 py-3 rounded hover:bg-blue-700 dark:hover:bg-blue-600 transition-colors"
-          >
+          <button onClick={() => router.push('/')} className="bg-blue-600 dark:bg-blue-500 text-white px-6 py-3 rounded hover:bg-blue-700 transition-colors">
             Return to Home
           </button>
         </div>
@@ -299,72 +232,39 @@ function ExamLogic({ examCode }: ExamLogicProps) {
 
   return (
     <div className="max-w-3xl mx-auto p-4 md:p-8 mt-4 md:mt-8 bg-white dark:bg-gray-800 rounded-xl shadow-md mb-10 relative transition-colors border dark:border-gray-700">
-      
       <div className="flex flex-col md:flex-row justify-between md:items-center mb-4 border-b dark:border-gray-700 pb-4 gap-4 md:gap-0">
         <h1 className="text-xl md:text-2xl font-bold text-gray-900 dark:text-white">
-          ASE {examCode} {isExamMode ? 'Exam' : 'Practice'} 
-          {topic && <span className="text-blue-600 dark:text-blue-400 ml-2 text-base md:text-lg block md:inline">({topic} Focus)</span>}
-          {isReviewMode && <span className="text-red-500 dark:text-red-400 ml-2 block md:inline">(Review Missed)</span>}
+          ASE {examCode} {isExamMode ? 'Exam' : isArcadeMode ? 'Arcade Mode' : 'Practice'} 
         </h1>
-        
         <div className="flex items-center justify-between md:justify-end gap-4 w-full md:w-auto">
-          {isExamMode && !isFinished && timeLeft !== null && (
+          {(isExamMode || isArcadeMode) && !isFinished && timeLeft !== null && (
             <span className={`font-mono text-lg font-bold ${timeLeft < 60 ? 'text-red-600 dark:text-red-400 animate-pulse' : 'text-gray-700 dark:text-gray-300'}`}>
               ⏱ {formatTime(timeLeft)}
             </span>
           )}
-          <button 
-            onClick={() => router.push('/')}
-            className="text-gray-500 dark:text-gray-400 hover:text-red-600 dark:hover:text-red-400 font-medium transition-colors flex items-center gap-1"
-            title="Exit to Home"
-          >
-            ✕ Exit
-          </button>
+          {(!isExamMode && !isArcadeMode) && (
+            <button onClick={handleFinishEarly} className="text-sm bg-gray-200 dark:bg-gray-700 hover:bg-gray-300 dark:hover:bg-gray-600 text-gray-800 dark:text-gray-200 px-3 py-1 rounded transition-colors">
+              Finish Early
+            </button>
+          )}
+          <button onClick={() => router.push('/')} className="text-gray-500 dark:text-gray-400 hover:text-red-600 font-medium transition-colors">✕ Exit</button>
         </div>
       </div>
 
-      <div className="flex flex-col md:flex-row justify-between md:items-center mb-6 gap-2 md:gap-0">
-        <p className="text-sm text-gray-500 dark:text-gray-400">
-          {isReviewMode 
-            ? `Reviewing Missed Question ${reviewPosition + 1} of ${reviewIndices.length}`
-            : `Question ${currentIndex + 1} of ${questions.length}`
-          }
-        </p>
-        <span className="text-xs font-bold bg-blue-100 dark:bg-blue-900/40 text-blue-800 dark:text-blue-300 px-2 py-1 rounded uppercase tracking-wider self-start md:self-auto">
-          {currentQuestion.topic}
-        </span>
-      </div>
-      
-      <p className="text-lg md:text-xl font-medium mb-8 text-gray-800 dark:text-gray-200 leading-relaxed">{currentQuestion.stem_text}</p>
+      <p className="text-lg md:text-xl font-medium mb-8 text-gray-800 dark:text-gray-200">{currentQuestion.stem_text}</p>
       
       <div className="space-y-3 mb-8">
         {currentQuestion.choices.map((choice) => {
-          const isEliminated = eliminatedChoices[activeIndex]?.includes(choice.id);
           let btnClass = "w-full text-left p-4 border rounded-lg transition-all duration-200 ";
-          
-          if (isEliminated) {
-            btnClass += "opacity-40 cursor-not-allowed bg-gray-100 dark:bg-gray-800 text-gray-400 dark:text-gray-600 border-gray-200 dark:border-gray-700";
-          } else if (showResults) {
-            if (choice.is_correct) {
-              btnClass += "bg-green-100 dark:bg-green-900/30 border-green-500 dark:border-green-500 text-green-900 dark:text-green-100"; 
-            } else if (currentSelectedAnswer === choice.id) {
-              btnClass += "bg-red-100 dark:bg-red-900/30 border-red-500 dark:border-red-500 text-red-900 dark:text-red-100"; 
-            } else {
-              btnClass += "bg-gray-50 dark:bg-gray-700/50 border-gray-200 dark:border-gray-600 text-gray-500 dark:text-gray-400"; 
-            }
+          if (showResults) {
+            if (choice.is_correct) btnClass += "bg-green-100 dark:bg-green-900/30 border-green-500 text-green-900 dark:text-green-100"; 
+            else if (currentSelectedAnswer === choice.id) btnClass += "bg-red-100 dark:bg-red-900/30 border-red-500 text-red-900 dark:text-red-100"; 
+            else btnClass += "bg-gray-50 dark:bg-gray-700/50 border-gray-200 dark:border-gray-600 text-gray-500"; 
           } else {
-            btnClass += currentSelectedAnswer === choice.id 
-              ? "bg-blue-50 dark:bg-blue-900/40 border-blue-500 dark:border-blue-400 text-blue-900 dark:text-blue-100" 
-              : "bg-white dark:bg-gray-800 border-gray-300 dark:border-gray-600 hover:bg-gray-50 dark:hover:bg-gray-700 text-gray-700 dark:text-gray-200";
+            btnClass += currentSelectedAnswer === choice.id ? "bg-blue-50 dark:bg-blue-900/40 border-blue-500 text-blue-900 dark:text-blue-100" : "bg-white dark:bg-gray-800 border-gray-300 dark:border-gray-600 hover:bg-gray-50 dark:hover:bg-gray-700 text-gray-700 dark:text-gray-200";
           }
-          
           return (
-            <button 
-              key={choice.id} 
-              onClick={() => handleSelectAnswer(choice.id)} 
-              className={btnClass} 
-              disabled={showResults || isEliminated}
-            >
+            <button key={choice.id} onClick={() => handleSelectAnswer(choice.id)} className={btnClass} disabled={showResults}>
               {choice.choice_text}
             </button>
           );
@@ -374,49 +274,21 @@ function ExamLogic({ examCode }: ExamLogicProps) {
       {showResults && (
         <div className="bg-blue-50 dark:bg-blue-900/20 p-5 rounded-lg mb-8 border border-blue-200 dark:border-blue-800">
           <p className="font-bold text-blue-800 dark:text-blue-300 mb-2">Explanation:</p>
-          <p className="text-blue-900 dark:text-blue-100 leading-relaxed">{currentQuestion.explanation_text}</p>
+          <p className="text-blue-900 dark:text-blue-100">{currentQuestion.explanation_text}</p>
         </div>
       )}
 
-      <div className="flex flex-col-reverse md:flex-row justify-between items-center mt-6 gap-4 md:gap-0">
-        <button 
-          onClick={handleBack} 
-          disabled={isReviewMode ? reviewPosition === 0 : currentIndex === 0} 
-          className="w-full md:w-auto bg-gray-500 dark:bg-gray-600 text-white px-6 py-3 md:py-2 rounded-lg disabled:opacity-50 hover:bg-gray-600 dark:hover:bg-gray-500 transition-colors font-medium"
-        >
-          Back
-        </button>
-
-        <div className="flex flex-col md:flex-row gap-3 w-full md:w-auto">
-          {!isExamMode && !showResults && !eliminatedChoices[activeIndex] && (
-            <button 
-              onClick={handleHint}
-              className="w-full md:w-auto bg-purple-100 dark:bg-purple-900/30 text-purple-700 dark:text-purple-300 px-4 py-3 md:py-2 rounded-lg hover:bg-purple-200 dark:hover:bg-purple-900/50 transition-colors font-semibold text-sm border border-purple-200 dark:border-purple-800"
-            >
-              💡 50/50 Hint
-            </button>
-          )}
-
-          {isReviewMode ? (
-            <button onClick={handleNext} className="w-full md:w-auto bg-green-600 dark:bg-green-500 text-white px-6 py-3 md:py-2 rounded-lg hover:bg-green-700 dark:hover:bg-green-600 transition-colors font-medium">
-              {reviewPosition < reviewIndices.length - 1 ? 'Next Missed' : 'Finish Review'}
-            </button>
-          ) : isExamMode ? (
-            <button onClick={handleNext} disabled={!currentSelectedAnswer} className="w-full md:w-auto bg-blue-600 dark:bg-blue-500 text-white px-6 py-3 md:py-2 rounded-lg disabled:opacity-50 hover:bg-blue-700 dark:hover:bg-blue-600 transition-colors font-medium">
-              {currentIndex < questions.length - 1 ? 'Next Question' : 'Finish Exam'}
-            </button>
-          ) : !checkedQuestions[activeIndex] ? (
-            <button onClick={handleCheckAnswer} disabled={!currentSelectedAnswer} className="w-full md:w-auto bg-blue-600 dark:bg-blue-500 text-white px-6 py-3 md:py-2 rounded-lg disabled:opacity-50 hover:bg-blue-700 dark:hover:bg-blue-600 transition-colors font-medium">
-              Check Answer
-            </button>
-          ) : (
-            <button onClick={handleNext} className="w-full md:w-auto bg-green-600 dark:bg-green-500 text-white px-6 py-3 md:py-2 rounded-lg hover:bg-green-700 dark:hover:bg-green-600 transition-colors font-medium">
-              {currentIndex < questions.length - 1 ? 'Next Question' : 'Finish Practice'}
-            </button>
-          )}
-        </div>
+      <div className="flex justify-end mt-6">
+        {isReviewMode ? (
+          <button onClick={handleNext} className="bg-green-600 text-white px-6 py-2 rounded-lg hover:bg-green-700 transition-colors">Next Missed</button>
+        ) : isExamMode ? (
+          <button onClick={handleNext} disabled={!currentSelectedAnswer} className="bg-blue-600 text-white px-6 py-2 rounded-lg disabled:opacity-50 hover:bg-blue-700 transition-colors">Next Question</button>
+        ) : !checkedQuestions[activeIndex] ? (
+          <button onClick={handleCheckAnswer} disabled={!currentSelectedAnswer} className="bg-blue-600 text-white px-6 py-2 rounded-lg disabled:opacity-50 hover:bg-blue-700 transition-colors">Check Answer</button>
+        ) : (
+          <button onClick={handleNext} className="bg-green-600 text-white px-6 py-2 rounded-lg hover:bg-green-700 transition-colors">Next Question</button>
+        )}
       </div>
-
       <div ref={bottomRef} className="h-4"></div>
     </div>
   );

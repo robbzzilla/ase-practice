@@ -58,10 +58,10 @@ export default function Home() {
           console.error("Failed to fetch synced scores:", err);
         }
       } else if (status !== 'loading') {
-        const localScores = localStorage.getItem('ase_highscores');
+        const localScores = sessionStorage.getItem('ase_highscores');
         if (localScores) setHighScores(JSON.parse(localScores));
 
-        const localTopics = localStorage.getItem('ase_topics');
+        const localTopics = sessionStorage.getItem('ase_topics');
         if (localTopics) setTopicStats(JSON.parse(localTopics));
       }
     };
@@ -162,6 +162,9 @@ export default function Home() {
                     </Link>
                     <Link href={`/test/${exam.code}?mode=exam`} className="flex-1 text-center px-4 py-3 bg-purple-600 dark:bg-purple-500 text-white rounded-lg hover:bg-purple-700 dark:hover:bg-purple-600 font-bold transition-colors shadow-sm">
                       Start Exam Mode
+                    </Link>
+                    <Link href={`/test/${exam.code}?mode=arcade`} className="flex-1 text-center px-4 py-3 bg-orange-500 dark:bg-orange-600 text-white rounded-lg hover:bg-orange-600 font-bold transition-colors shadow-sm">
+                      Start Arcade Mode ⏱️
                     </Link>
                   </div>
 

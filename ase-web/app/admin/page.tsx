@@ -364,51 +364,6 @@ export default function AdminDashboard() {
           </div>
         </div>
       </div>
-
-      {/* Recent Activity Table */}
-      <div className="bg-white dark:bg-gray-800 rounded-xl shadow-sm border dark:border-gray-700 overflow-hidden transition-colors">
-        <div className="p-6 border-b dark:border-gray-700">
-          <h2 className="text-xl font-bold dark:text-white">Recent Platform Activity</h2>
-        </div>
-        <div className="overflow-x-auto">
-          <table className="w-full text-left border-collapse">
-            <thead className="bg-gray-50 dark:bg-gray-900/50">
-              <tr>
-                <th className="p-4 font-semibold text-gray-600 dark:text-gray-400 border-b dark:border-gray-700">User</th>
-                <th className="p-4 font-semibold text-gray-600 dark:text-gray-400 border-b dark:border-gray-700">Exam</th>
-                <th className="p-4 font-semibold text-gray-600 dark:text-gray-400 border-b dark:border-gray-700">Mode</th>
-                <th className="p-4 font-semibold text-gray-600 dark:text-gray-400 border-b dark:border-gray-700">Score</th>
-                <th className="p-4 font-semibold text-gray-600 dark:text-gray-400 border-b dark:border-gray-700">Date</th>
-              </tr>
-            </thead>
-            <tbody>
-              {stats?.recentExams?.length > 0 ? (
-                stats.recentExams.map((exam: any) => (
-                  <tr key={exam.id} className="border-b dark:border-gray-700/50 last:border-0 hover:bg-gray-50 dark:hover:bg-gray-700/25 transition-colors">
-                    <td className="p-4 font-medium max-w-[150px] truncate" title={exam.user.username}>
-                      {exam.user.displayName || exam.user.username.split('@')[0]}
-                    </td>
-                    <td className="p-4 font-bold text-blue-600 dark:text-blue-400">ASE {exam.exam_code}</td>
-                    <td className="p-4 text-gray-600 dark:text-gray-300">{exam.mode}</td>
-                    <td className={`p-4 font-bold ${exam.score_percentage >= 70 ? 'text-green-600 dark:text-green-400' : 'text-red-600 dark:text-red-400'}`}>
-                      {exam.score_percentage}%
-                    </td>
-                    <td className="p-4 text-sm text-gray-500 dark:text-gray-400">
-                      {new Date(exam.created_at).toLocaleDateString()}
-                    </td>
-                  </tr>
-                ))
-              ) : (
-                <tr>
-                  <td colSpan={5} className="p-8 text-center text-gray-500 dark:text-gray-400 italic">
-                    No recent activity found.
-                  </td>
-                </tr>
-              )}
-            </tbody>
-          </table>
-        </div>
-      </div>
     </div>
   );
 }
